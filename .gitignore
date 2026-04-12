@@ -1,0 +1,6 @@
+.claude
+build/
+_corral/
+_repos/
+*.o
+*.swp
