@@ -1,6 +1,7 @@
 class val DiagRecord
   """
-  A single ODBC diagnostic record from SQLGetDiagRec."""
+  A single ODBC diagnostic record from SQLGetDiagRec.
+  """
   let sqlstate: String val
   let native_code: I32
   let _message: String val
@@ -32,14 +33,16 @@ primitive _DiagHelper
   Read diagnostic records from an ODBC handle.
 
   Caps: message length at 4096 bytes, chain length at 16 records.
-  These are defense-in-depth limits against malicious/buggy drivers."""
+  These are defense-in-depth limits against malicious/buggy drivers.
+  """
 
   fun _max_message_bytes(): USize => 4096
   fun _max_records(): I16 => 16
 
   fun read(handle_type: I16, handle: Pointer[None] tag): DiagChain =>
     """
-    Read up to 16 diagnostic records from an ODBC handle."""
+    Read up to 16 diagnostic records from an ODBC handle.
+    """
 
     // Build arrays for FFI output — these must be ref so we can read them
     let state_buf: String ref = String(6)

@@ -12,7 +12,8 @@ class val ConnectError
 
   fun string(): String iso^ =>
     """
-    Redacted. Returns kind only — no DSN content, no raw diag messages."""
+    Redacted. Returns kind only — no DSN content, no raw diag messages.
+    """
     recover iso
       let s = String
       s.append("ConnectError: ")
@@ -29,7 +30,8 @@ class val ConnectError
 
   fun unsafe_diag(): DiagChain =>
     """
-    Raw diagnostic chain. May contain credentials from the driver."""
+    Raw diagnostic chain. May contain credentials from the driver.
+    """
     _diag
 
 type ConnectErrorKind is (EnvAllocFailed | DbcAllocFailed | DriverConnectFailed)
@@ -59,7 +61,8 @@ class val ExecError
 
   fun string(): String iso^ =>
     """
-    Redacted. Returns kind + SQLSTATE. No SQL text."""
+    Redacted. Returns kind + SQLSTATE. No SQL text.
+    """
     recover iso
       let s = String
       s.append("ExecError: ")
@@ -351,7 +354,8 @@ class val Warnings
 
   fun string(): String iso^ =>
     """
-    Redacted summary."""
+    Redacted summary.
+    """
     recover iso
       let s = String
       s.append("Warnings: ")
@@ -362,7 +366,8 @@ class val Warnings
 
   fun unsafe_diag(): DiagChain =>
     """
-    Raw diagnostic chain. May contain credential-bearing text."""
+    Raw diagnostic chain. May contain credential-bearing text.
+    """
     _diag
 
 
@@ -370,7 +375,8 @@ class val Warnings
 
 primitive ExecErrorClassifier
   """
-  Classify ODBC errors into ExecErrorKind based on SQLSTATE class."""
+  Classify ODBC errors into ExecErrorKind based on SQLSTATE class.
+  """
 
   fun classify(diag: DiagChain): ExecErrorKind =>
     try

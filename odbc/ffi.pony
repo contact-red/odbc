@@ -55,6 +55,10 @@ use @SQLRowCount[I16](stmt: Pointer[None] tag,
   row_count: Pointer[None] tag)
 use @SQLFreeStmt[I16](stmt: Pointer[None] tag, option: U16)
 
+// C stdlib
+use @memcpy[Pointer[None] tag](dst: Pointer[None] tag, src: Pointer[None] tag,
+  n: USize)
+
 // Diagnostics
 use @SQLGetDiagRec[I16](handle_type: I16, handle: Pointer[None] tag,
   rec_number: I16, sqlstate: Pointer[None] tag,
@@ -65,7 +69,8 @@ use @SQLGetDiagRec[I16](handle_type: I16, handle: Pointer[None] tag,
 
 primitive _ODBC
   """
-  ODBC constants."""
+  ODBC constants.
+  """
 
   // Handle types
   fun handle_env(): I16 => 1

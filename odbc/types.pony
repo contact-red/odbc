@@ -1,7 +1,8 @@
 class val Dsn
   """
   Opaque wrapper for ODBC connection strings. Separates credential-bearing
-  strings from general String val at the type level."""
+  strings from general String val at the type level.
+  """
   let _raw: String val
 
   new val create(s: String val) =>
@@ -9,12 +10,15 @@ class val Dsn
 
   fun _string(): String val =>
     """
-    Package-private accessor for Odbc.connect()."""
+    Package-private accessor for Odbc.connect().
+    """
     _raw
 
 
 class val ParamIndex
-  """1-based parameter index. Bounds checking happens at bind time."""
+  """
+  1-based parameter index. Bounds checking happens at bind time.
+  """
   let _n: U16
 
   new val create(n: U16) =>
@@ -27,7 +31,9 @@ class val ParamIndex
 
 
 class val ColIndex
-  """1-based column index. Bounds checking happens at row access time."""
+  """
+  1-based column index. Bounds checking happens at row access time.
+  """
   let _n: U16
 
   new val create(n: U16) =>
@@ -42,22 +48,26 @@ class val ColIndex
 type RowCount is (USize | None)
   """
   Result of exec/execute_update. USize is affected row count.
-  None means the driver returned SQL_NO_ROW_COUNT (-1)."""
+  None means the driver returned SQL_NO_ROW_COUNT (-1).
+  """
 
 
 primitive EndOfRows
   """
-  Returned by fetch() when no more rows are available."""
+  Returned by fetch() when no more rows are available.
+  """
 
 
 type SqlValue is (SqlNull | SqlBool | SqlInt | SqlFloat | SqlText)
   """
-  Union of all supported SQL value types."""
+  Union of all supported SQL value types.
+  """
 
 
 primitive SqlNull
   """
-  SQL NULL value."""
+  SQL NULL value.
+  """
   fun string(): String val => "NULL"
 
 
@@ -74,7 +84,8 @@ class val SqlBool
 class val SqlInt
   """
   Wraps I64. All integer column types (SMALLINT, INTEGER, BIGINT) are
-  read via SQL_C_SBIGINT and surfaced as I64. Platform-portable."""
+  read via SQL_C_SBIGINT and surfaced as I64. Platform-portable.
+  """
   let value: I64
 
   new val create(v: I64) =>
@@ -87,7 +98,8 @@ class val SqlInt
 class val SqlFloat
   """
   Wraps F64. All float column types (REAL, DOUBLE, FLOAT) are read
-  via SQL_C_DOUBLE and surfaced as F64."""
+  via SQL_C_DOUBLE and surfaced as F64.
+  """
   let value: F64
 
   new val create(v: F64) =>
@@ -99,7 +111,8 @@ class val SqlFloat
 
 class val SqlText
   """
-  Wraps String val. Validated UTF-8 at the FFI boundary."""
+  Wraps String val. Validated UTF-8 at the FFI boundary.
+  """
   let value: String val
 
   new val create(v: String val) =>

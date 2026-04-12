@@ -2,22 +2,27 @@ class ref Cursor
   """
   Non-sendable result set from an ad-hoc query (Connection.query()).
   Supports fetch and close only — no binding, no re-execution.
-  close() frees the underlying SQLHSTMT entirely."""
+  close() frees the underlying SQLHSTMT entirely.
+  """
 
   var _hstmt: Pointer[None] tag
   let _conn_alive: _AliveFlag ref
   var _closed: Bool
   var _last_warnings: (Warnings | None)
+  var _col_bindings: (_ColumnBindings | None)
 
   new ref _create(hstmt: Pointer[None] tag, conn_alive: _AliveFlag ref) =>
     _hstmt = hstmt
     _conn_alive = conn_alive
     _closed = false
     _last_warnings = None
+    // Set up column bindings immediately — cursor is already open
+    _col_bindings = try _ColumnBindings(hstmt)? else None end
 
   fun ref fetch(): (Row | EndOfRows | FetchError) =>
     """
-    Fetch the next row."""
+    Fetch the next row.
+    """
     if _closed then return FetchError(CursorClosed) end
     if not _conn_alive.is_alive() then return FetchError(FetchConnectionClosed) end
 
@@ -38,18 +43,23 @@ class ref Cursor
       return FetchError(DriverFetchError, diag)
     end
 
-    _ReadColumns.build_row(_hstmt)
+    match _col_bindings
+    | let cb: _ColumnBindings => cb.build_row()
+    else FetchError(DriverFetchError)
+    end
 
   fun ref last_warnings(): (Warnings | None) =>
     _last_warnings
 
   fun ref close() =>
     """
-    Free the SQLHSTMT. Idempotent."""
+    Free the SQLHSTMT. Idempotent.
+    """
     if _closed then return end
     @SQLFreeHandle(_ODBC.handle_stmt(), _hstmt)
     _hstmt = Pointer[None]
     _closed = true
+    _col_bindings = None
 
   fun _final() =>
     if not _closed then

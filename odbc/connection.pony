@@ -1,11 +1,13 @@
 primitive Odbc
   """
-  Entry point for ODBC connections."""
+  Entry point for ODBC connections.
+  """
 
   fun connect(dsn: Dsn): (Connection | ConnectError) =>
     """
     Connect to an ODBC data source. Each Connection owns its own
-    SQLHENV (no shared environment handle across connections)."""
+    SQLHENV (no shared environment handle across connections).
+    """
 
     // Allocate environment handle
     var henv: Pointer[None] tag = Pointer[None]
@@ -61,7 +63,8 @@ primitive Odbc
 class ref Connection
   """
   Non-sendable database connection wrapping SQLHDBC (and its own SQLHENV).
-  All methods check internal state and return errors for misuse."""
+  All methods check internal state and return errors for misuse.
+  """
 
   var _henv: Pointer[None] tag
   var _hdbc: Pointer[None] tag
@@ -84,7 +87,8 @@ class ref Connection
   fun ref exec(sql: String val): (RowCount | ExecError) =>
     """
     Execute a non-parameterized statement via SQLExecDirect.
-    Returns affected row count, or None for DDL."""
+    Returns affected row count, or None for DDL.
+    """
     if _closed then
       return ExecError(ConnectionClosed,
         recover val Array[DiagRecord] end, sql)
@@ -129,7 +133,8 @@ class ref Connection
 
   fun ref prepare(sql: String val): (Statement | PrepareError) =>
     """
-    Prepare a statement for parameter binding and repeated execution."""
+    Prepare a statement for parameter binding and repeated execution.
+    """
     if _closed then
       return PrepareError(PrepareConnectionClosed,
         recover val Array[DiagRecord] end, sql)
@@ -166,7 +171,8 @@ class ref Connection
 
   fun ref query(sql: String val): (Cursor | ExecError) =>
     """
-    Execute a SELECT via SQLExecDirect and return a Cursor."""
+    Execute a SELECT via SQLExecDirect and return a Cursor.
+    """
     if _closed then
       return ExecError(ConnectionClosed,
         recover val Array[DiagRecord] end, sql)
@@ -200,7 +206,8 @@ class ref Connection
   fun ref begin(): (None | TxBeginError) =>
     """
     Set autocommit off. Returns error if already in a transaction
-    or if the connection is closed."""
+    or if the connection is closed.
+    """
     if _closed then
       return TxBeginError(TxBeginConnectionClosed)
     end
@@ -227,7 +234,8 @@ class ref Connection
 
   fun ref commit(): (None | TxCommitError) =>
     """
-    Commit the current transaction and re-enable autocommit."""
+    Commit the current transaction and re-enable autocommit.
+    """
     if _closed then
       return TxCommitError(NotInTransaction)
     end
@@ -276,7 +284,8 @@ class ref Connection
 
   fun ref rollback(): (None | TxRollbackError) =>
     """
-    Rollback the current transaction and re-enable autocommit."""
+    Rollback the current transaction and re-enable autocommit.
+    """
     if _closed then
       return TxRollbackError(RollbackNotInTransaction)
     end
@@ -313,7 +322,8 @@ class ref Connection
   fun ref close() =>
     """
     Close the connection. Idempotent. Auto-rollbacks if in a transaction.
-    Sets shared _alive flag to false."""
+    Sets shared _alive flag to false.
+    """
     if _closed then return end
 
     if _in_tx then
@@ -331,7 +341,8 @@ class ref Connection
 
   fun _final() =>
     """
-    Safety net. Calls cleanup if not already closed."""
+    Safety net. Calls cleanup if not already closed.
+    """
     if not _closed then
       if _in_tx then
         @SQLEndTran(_ODBC.handle_dbc(), _hdbc, _ODBC.sql_rollback())

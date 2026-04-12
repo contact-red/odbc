@@ -5,7 +5,8 @@ class ref _AliveFlag
   via is_alive() before touching FFI handles.
 
   The ref reference gives ORCA a reference path from child to parent,
-  ensuring the Connection's finalizer runs after its children's."""
+  ensuring the Connection's finalizer runs after its children's.
+  """
   var _alive: Bool = true
 
   fun ref set_dead() =>

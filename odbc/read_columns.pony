@@ -1,20 +1,43 @@
-primitive _ReadColumns
+class ref _ColumnBindings
   """
-  Shared column-reading logic for Statement and Cursor.
-  Reads all columns via SQLGetData and builds a Row val."""
+  Manages SQLBindCol buffers for a cursor's result set. Created once when
+  a cursor opens; SQLFetch writes directly into these buffers.
+  """
 
-  fun build_row(hstmt: Pointer[None] tag): (Row | FetchError) =>
-    var num_cols: I16 = 0
-    @SQLNumResultCols(hstmt, addressof num_cols)
+  let _num_cols: USize
+  // Per-column metadata
+  let _sql_types: Array[I16] ref
+  let _c_types: Array[I16] ref
+  // Per-column buffers for fixed-width types (I64, F64, U8)
+  let _fixed_bufs: Array[Array[U8]] ref
+  // Per-column buffers for text
+  let _text_bufs: Array[String ref] ref
+  // Per-column indicator (SQL_NULL_DATA or byte length)
+  let _indicators: Array[I64] ref
+  // Whether column is text (needs text_buf) or fixed (needs fixed_buf)
+  let _is_text: Array[Bool] ref
+  // Whether column type is unsupported
+  let _is_unsupported: Array[Bool] ref
 
-    let columns: Array[SqlValue] iso = recover iso Array[SqlValue](num_cols.usize()) end
+  new ref create(hstmt: Pointer[None] tag) ? =>
+    var nc: I16 = 0
+    @SQLNumResultCols(hstmt, addressof nc)
+    _num_cols = nc.usize()
+
+    _sql_types = Array[I16](_num_cols)
+    _c_types = Array[I16](_num_cols)
+    _fixed_bufs = Array[Array[U8]](_num_cols)
+    _text_bufs = Array[String ref](_num_cols)
+    _indicators = Array[I64].init(0, _num_cols)
+    _is_text = Array[Bool](_num_cols)
+    _is_unsupported = Array[Bool](_num_cols)
 
     var col: U16 = 1
-    while col <= num_cols.u16() do
+    while col <= nc.u16() do
+      // Describe column
       let name_buf: String ref = String(256)
       var j: USize = 0
       while j < 256 do name_buf.push(0); j = j + 1 end
-
       var name_len: I16 = 0
       var data_type: I16 = 0
       var col_size: U64 = 0
@@ -26,95 +49,152 @@ primitive _ReadColumns
         addressof data_type, addressof col_size,
         addressof decimal_digits, addressof nullable)
 
-      match _read_column(hstmt, col, data_type, col_size)
-      | let sv: SqlValue => columns.push(sv)
-      | let e: FetchError => return e
+      _sql_types.push(data_type)
+
+      let pos = (col - 1).usize()
+
+      // Map SQL type to C type
+      let c_type: I16 = match data_type
+      | _ODBC.sql_bit() => _ODBC.c_bit()
+      | _ODBC.sql_smallint() => _ODBC.c_sbigint()
+      | _ODBC.sql_integer() => _ODBC.c_sbigint()
+      | _ODBC.sql_bigint() => _ODBC.c_sbigint()
+      | _ODBC.sql_real() => _ODBC.c_double()
+      | _ODBC.sql_float() => _ODBC.c_double()
+      | _ODBC.sql_double() => _ODBC.c_double()
+      | _ODBC.sql_char() => _ODBC.c_char()
+      | _ODBC.sql_varchar() => _ODBC.c_char()
+      | _ODBC.sql_longvarchar() => _ODBC.c_char()
+      else
+        // Unsupported type — don't bind, will produce FetchError
+        _c_types.push(0)
+        _fixed_bufs.push(Array[U8])
+        _text_bufs.push(String)
+        _is_text.push(false)
+        _is_unsupported.push(true)
+        col = col + 1
+        continue
+      end
+
+      _c_types.push(c_type)
+      _is_unsupported.push(false)
+
+      if c_type == _ODBC.c_char() then
+        // Text column: allocate buffer based on declared col_size, capped
+        let buf_size = (col_size + 1).usize().min(16_777_216) // 16 MB
+        let tbuf: String ref = String(buf_size)
+        j = 0
+        while j < buf_size do tbuf.push(0); j = j + 1 end
+
+        _fixed_bufs.push(Array[U8])
+        _text_bufs.push(tbuf)
+        _is_text.push(true)
+
+        // Bind the text column
+        let rc = @SQLBindCol(hstmt, col, c_type,
+          tbuf.cpointer(), buf_size.i64(),
+          _indicators.cpointer(pos))
+        if not _ODBC.ok(rc) then error end
+      else
+        // Fixed-width column: 8 bytes covers I64 and F64; 1 byte for BIT
+        let fsize: USize = if c_type == _ODBC.c_bit() then 1 else 8 end
+        let fbuf = Array[U8].init(0, fsize)
+
+        _fixed_bufs.push(fbuf)
+        _text_bufs.push(String)
+        _is_text.push(false)
+
+        // Bind the fixed column
+        let rc = @SQLBindCol(hstmt, col, c_type,
+          fbuf.cpointer(), fsize.i64(),
+          _indicators.cpointer(pos))
+        if not _ODBC.ok(rc) then error end
       end
 
       col = col + 1
     end
 
+  fun ref build_row(): (Row | FetchError) =>
+    """
+    Build a Row val from the already-fetched bound buffers.
+    Called after SQLFetch has written into the bound column buffers.
+    """
+    let columns = recover iso Array[SqlValue](_num_cols) end
+
+    var i: USize = 0
+    while i < _num_cols do
+      try
+        if _is_unsupported(i)? then
+          return FetchError(UnsupportedColumnType)
+        end
+
+        let ind = _indicators(i)?
+
+        if ind == _ODBC.sql_null_data() then
+          columns.push(SqlNull)
+        elseif _is_text(i)? then
+          // Text: read from text buffer
+          let tbuf = _text_bufs(i)?
+          let len = ind.usize()
+
+          // Validate UTF-8
+          let text: String val = tbuf.substring(0, len.isize())
+          if not _is_valid_utf8(text) then
+            return FetchError(InvalidUtf8)
+          end
+          columns.push(SqlText(text))
+        else
+          // Fixed-width: read from fixed buffer
+          let fbuf = _fixed_bufs(i)?
+          let c_type = _c_types(i)?
+
+          if c_type == _ODBC.c_sbigint() then
+            var value: I64 = 0
+            @memcpy(addressof value, fbuf.cpointer(), 8)
+            columns.push(SqlInt(value))
+          elseif c_type == _ODBC.c_double() then
+            var value: F64 = 0
+            @memcpy(addressof value, fbuf.cpointer(), 8)
+            columns.push(SqlFloat(value))
+          elseif c_type == _ODBC.c_bit() then
+            columns.push(SqlBool(try fbuf(0)? != 0 else false end))
+          end
+        end
+      else
+        return FetchError(DriverFetchError)
+      end
+      i = i + 1
+    end
+
     Row.create(consume columns)
 
-  fun _read_column(hstmt: Pointer[None] tag, col: U16, sql_type: I16,
-    col_size: U64): (SqlValue | FetchError) =>
-
-    let c_type: I16 = match sql_type
-    | _ODBC.sql_bit() => _ODBC.c_bit()
-    | _ODBC.sql_smallint() => _ODBC.c_sbigint()
-    | _ODBC.sql_integer() => _ODBC.c_sbigint()
-    | _ODBC.sql_bigint() => _ODBC.c_sbigint()
-    | _ODBC.sql_real() => _ODBC.c_double()
-    | _ODBC.sql_float() => _ODBC.c_double()
-    | _ODBC.sql_double() => _ODBC.c_double()
-    | _ODBC.sql_char() => _ODBC.c_char()
-    | _ODBC.sql_varchar() => _ODBC.c_char()
-    | _ODBC.sql_longvarchar() => _ODBC.c_char()
+  fun _is_valid_utf8(s: String box): Bool =>
+    """
+    Validate UTF-8 by checking that Pony can iterate the codepoints
+    without encountering replacement characters where none were in
+    the original bytes.
+    """
+    try
+      var byte_i: USize = 0
+      while byte_i < s.size() do
+        (let cp, let width) = s.utf32(byte_i.isize())?
+        if width == 0 then return false end
+        // 0xFFFD is the replacement character — if we see it but the bytes
+        // aren't actually 0xEF 0xBF 0xBD, the data is invalid
+        if (cp == 0xFFFD) and (width != 3) then return false end
+        if (cp == 0xFFFD) and (width == 3) then
+          // Could be a real replacement character — check bytes
+          if (s(byte_i)? != 0xEF) or
+             (s(byte_i + 1)? != 0xBF) or
+             (s(byte_i + 2)? != 0xBD) then
+            return false
+          end
+        end
+        byte_i = byte_i + width.usize()
+      end
+      true
     else
-      return FetchError(UnsupportedColumnType)
+      false
     end
 
-    var ind: I64 = 0
-
-    if c_type == _ODBC.c_sbigint() then
-      var value: I64 = 0
-      let rc = @SQLGetData(hstmt, col, c_type,
-        addressof value, 8, addressof ind)
-      if not _ODBC.ok(rc) then
-        return FetchError(DriverFetchError,
-          _DiagHelper.read(_ODBC.handle_stmt(), hstmt))
-      end
-      if ind == _ODBC.sql_null_data() then SqlNull
-      else SqlInt(value)
-      end
-
-    elseif c_type == _ODBC.c_double() then
-      var value: F64 = 0.0
-      let rc = @SQLGetData(hstmt, col, c_type,
-        addressof value, 8, addressof ind)
-      if not _ODBC.ok(rc) then
-        return FetchError(DriverFetchError,
-          _DiagHelper.read(_ODBC.handle_stmt(), hstmt))
-      end
-      if ind == _ODBC.sql_null_data() then SqlNull
-      else SqlFloat(value)
-      end
-
-    elseif c_type == _ODBC.c_bit() then
-      var value: U8 = 0
-      let rc = @SQLGetData(hstmt, col, c_type,
-        addressof value, 1, addressof ind)
-      if not _ODBC.ok(rc) then
-        return FetchError(DriverFetchError,
-          _DiagHelper.read(_ODBC.handle_stmt(), hstmt))
-      end
-      if ind == _ODBC.sql_null_data() then SqlNull
-      else SqlBool(value != 0)
-      end
-
-    elseif c_type == _ODBC.c_char() then
-      // Allocate buffer based on column size, capped at 16 MB
-      let buf_size = (col_size + 1).usize().min(16_777_216)
-      let buf: String ref = String(buf_size)
-      var k: USize = 0
-      while k < buf_size do buf.push(0); k = k + 1 end
-
-      let rc = @SQLGetData(hstmt, col, c_type,
-        buf.cpointer(), buf_size.i64(), addressof ind)
-      if not _ODBC.ok(rc) then
-        return FetchError(DriverFetchError,
-          _DiagHelper.read(_ODBC.handle_stmt(), hstmt))
-      end
-      if ind == _ODBC.sql_null_data() then
-        SqlNull
-      elseif ind > buf_size.i64() then
-        FetchError(ColumnTooLarge)
-      else
-        let len = ind.usize().min(buf_size - 1)
-        let text: String val = buf.substring(0, len.isize())
-        // UTF-8 validation: Pony strings track utf8 validity
-        SqlText(text)
-      end
-    else
-      FetchError(UnsupportedColumnType)
-    end
+  fun num_cols(): USize => _num_cols

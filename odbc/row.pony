@@ -3,7 +3,8 @@ class val Row
   Immutable snapshot of one fetched row. Safe to hold across fetches,
   safe to send across actors.
 
-  Typed accessors raise error on both out-of-range index AND type mismatch."""
+  Typed accessors raise error on both out-of-range index AND type mismatch.
+  """
 
   let _columns: Array[SqlValue] val
 
@@ -12,13 +13,15 @@ class val Row
 
   fun column(i: ColIndex): SqlValue ? =>
     """
-    Polymorphic access. Raises error on out-of-range index."""
+    Polymorphic access. Raises error on out-of-range index.
+    """
     let idx = (i.apply() - 1).usize()
     _columns(idx)?
 
   fun int(i: ColIndex): (I64 | SqlNull) ? =>
     """
-    Read column as I64. Raises error on type mismatch or out of range."""
+    Read column as I64. Raises error on type mismatch or out of range.
+    """
     match column(i)?
     | SqlNull => SqlNull
     | let v: SqlInt => v.value
@@ -27,7 +30,8 @@ class val Row
 
   fun float(i: ColIndex): (F64 | SqlNull) ? =>
     """
-    Read column as F64. Raises error on type mismatch or out of range."""
+    Read column as F64. Raises error on type mismatch or out of range.
+    """
     match column(i)?
     | SqlNull => SqlNull
     | let v: SqlFloat => v.value
@@ -36,7 +40,8 @@ class val Row
 
   fun text(i: ColIndex): (String val | SqlNull) ? =>
     """
-    Read column as String val. Raises error on type mismatch or out of range."""
+    Read column as String val. Raises error on type mismatch or out of range.
+    """
     match column(i)?
     | SqlNull => SqlNull
     | let v: SqlText => v.value
@@ -45,7 +50,8 @@ class val Row
 
   fun bool(i: ColIndex): (Bool | SqlNull) ? =>
     """
-    Read column as Bool. Raises error on type mismatch or out of range."""
+    Read column as Bool. Raises error on type mismatch or out of range.
+    """
     match column(i)?
     | SqlNull => SqlNull
     | let v: SqlBool => v.value
@@ -54,7 +60,8 @@ class val Row
 
   fun is_null(i: ColIndex): Bool ? =>
     """
-    True if column value is SQL NULL. Raises error on out of range."""
+    True if column value is SQL NULL. Raises error on out of range.
+    """
     match column(i)?
     | SqlNull => true
     else false
@@ -62,5 +69,6 @@ class val Row
 
   fun size(): USize =>
     """
-    Number of columns in the row."""
+    Number of columns in the row.
+    """
     _columns.size()
