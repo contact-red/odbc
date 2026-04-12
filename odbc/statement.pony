@@ -305,6 +305,13 @@ class ref Statement
     else FetchError(DriverFetchError)
     end
 
+  fun ref values(): StatementIterator =>
+    """
+    Return an iterator for use with Pony's `for` loop.
+    FetchError during iteration raises error from next().
+    """
+    StatementIterator(this)
+
   // --- Cursor management ---
 
   fun ref close_cursor() =>

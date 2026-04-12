@@ -31,3 +31,5 @@ actor Main is TestList
     test(_TransactionTest)
     test(_ErrorPathsTest)
     test(_DoubleCloseTest)
+    test(_CursorValuesTest)
+    test(_StatementValuesTest)

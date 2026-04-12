@@ -435,3 +435,83 @@ class iso _DoubleCloseTest is UnitTest
       else h.fail("begin after close should error")
       end
     end
+
+
+class iso _CursorValuesTest is UnitTest
+  fun name(): String => "integration: cursor.values() iterator"
+
+  fun apply(h: TestHelper) =>
+    try
+      let conn = _TestSetup.connect(h)?
+      _TestSetup.exec(conn, "DROP TABLE IF EXISTS _test_iter", h)
+      _TestSetup.exec(conn,
+        "CREATE TABLE _test_iter (id INTEGER, name VARCHAR(32))", h)
+      _TestSetup.exec(conn, "INSERT INTO _test_iter VALUES (1, 'one')", h)
+      _TestSetup.exec(conn, "INSERT INTO _test_iter VALUES (2, 'two')", h)
+      _TestSetup.exec(conn, "INSERT INTO _test_iter VALUES (3, 'three')", h)
+
+      match conn.query("SELECT id, name FROM _test_iter ORDER BY id")
+      | let cursor: Cursor =>
+        var count: USize = 0
+        for row in cursor.values() do
+          count = count + 1
+          try
+            match row.int(ColIndex(1))?
+            | let v: I64 => h.assert_eq[I64](count.i64(), v)
+            else h.fail("null id")
+            end
+          else
+            h.fail("column read error")
+          end
+        end
+        h.assert_eq[USize](3, count, "expected 3 rows from iterator")
+        cursor.close()
+      | let e: ExecError => h.fail("query: " + e.string())
+      end
+
+      _TestSetup.exec(conn, "DROP TABLE IF EXISTS _test_iter", h)
+      conn.close()
+    end
+
+
+class iso _StatementValuesTest is UnitTest
+  fun name(): String => "integration: statement.values() iterator"
+
+  fun apply(h: TestHelper) =>
+    try
+      let conn = _TestSetup.connect(h)?
+      _TestSetup.exec(conn, "DROP TABLE IF EXISTS _test_siter", h)
+      _TestSetup.exec(conn,
+        "CREATE TABLE _test_siter (id INTEGER)", h)
+      _TestSetup.exec(conn, "INSERT INTO _test_siter VALUES (10)", h)
+      _TestSetup.exec(conn, "INSERT INTO _test_siter VALUES (20)", h)
+
+      match conn.prepare("SELECT id FROM _test_siter WHERE id > ? ORDER BY id")
+      | let stmt: Statement =>
+        match stmt.bind(ParamIndex(1), SqlInt(5))
+        | let e: BindError => h.fail("bind: " + e.string())
+        end
+        match stmt.execute()
+        | let e: ExecError => h.fail("exec: " + e.string())
+        end
+
+        var total: I64 = 0
+        for row in stmt.values() do
+          try
+            match row.int(ColIndex(1))?
+            | let v: I64 => total = total + v
+            else h.fail("null")
+            end
+          else
+            h.fail("read error")
+          end
+        end
+        h.assert_eq[I64](30, total, "expected 10+20=30")
+
+        stmt.close()
+      | let e: PrepareError => h.fail("prepare: " + e.string())
+      end
+
+      _TestSetup.exec(conn, "DROP TABLE IF EXISTS _test_siter", h)
+      conn.close()
+    end

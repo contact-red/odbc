@@ -49,6 +49,13 @@ class ref Cursor
     else FetchError(DriverFetchError)
     end
 
+  fun ref values(): CursorIterator =>
+    """
+    Return an iterator for use with Pony's `for` loop.
+    FetchError during iteration raises error from next().
+    """
+    CursorIterator(this)
+
   fun ref last_warnings(): (Warnings | None) =>
     _last_warnings
 
