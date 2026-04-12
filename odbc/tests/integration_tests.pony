@@ -2,12 +2,26 @@ use "pony_test"
 use ".."
 
 primitive _TestDsn
-  fun apply(): String val => "psqlred"
-  fun dsn(): Dsn => Dsn("DSN=" + apply())
+  fun apply(h: TestHelper): String val =>
+    let vars = h.env.vars
+    var i: USize = 0
+    while i < vars.size() do
+      try
+        let v = vars(i)?
+        if v.substring(0, 14) == "ODBC_TEST_DSN=" then
+          return v.substring(14)
+        end
+      end
+      i = i + 1
+    end
+    "psqlred"
+
+  fun dsn(h: TestHelper): Dsn =>
+    Dsn("DSN=" + apply(h))
 
 primitive _TestSetup
   fun connect(h: TestHelper): Connection ? =>
-    match Odbc.connect(_TestDsn.dsn())
+    match Odbc.connect(_TestDsn.dsn(h))
     | let c: Connection => c
     | let e: ConnectError =>
       h.fail("connect: " + e.string())
