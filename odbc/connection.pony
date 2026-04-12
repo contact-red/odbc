@@ -133,6 +133,16 @@ class ref Connection
       row_count.usize()
     end
 
+  fun ref exec_p(sql: String val): RowCount ? =>
+    """
+    Partial variant of exec(). Raises error on failure.
+    For try/else chaining of multiple statements.
+    """
+    match exec(sql)
+    | let rc: RowCount => rc
+    | let _: ExecError => error
+    end
+
   // --- Prepared statements ---
 
   fun ref prepare(sql: String val): (Statement | PrepareError) =>
@@ -171,6 +181,15 @@ class ref Connection
 
     Statement._create(hstmt, num_params.u16(), _alive, _validate_utf8)
 
+  fun ref prepare_p(sql: String val): Statement ? =>
+    """
+    Partial variant of prepare(). Raises error on failure.
+    """
+    match prepare(sql)
+    | let s: Statement => s
+    | let _: PrepareError => error
+    end
+
   // --- Ad-hoc SELECT ---
 
   fun ref query(sql: String val): (Cursor | ExecError) =>
@@ -204,6 +223,15 @@ class ref Connection
     end
 
     Cursor._create(hstmt, _alive, _validate_utf8)
+
+  fun ref query_p(sql: String val): Cursor ? =>
+    """
+    Partial variant of query(). Raises error on failure.
+    """
+    match query(sql)
+    | let c: Cursor => c
+    | let _: ExecError => error
+    end
 
   // --- Transactions ---
 
@@ -315,6 +343,30 @@ class ref Connection
       None
     end
     None
+
+  fun ref begin_p() ? =>
+    """
+    Partial variant of begin(). Raises error on failure.
+    """
+    match begin()
+    | let _: TxBeginError => error
+    end
+
+  fun ref commit_p() ? =>
+    """
+    Partial variant of commit(). Raises error on failure.
+    """
+    match commit()
+    | let _: TxCommitError => error
+    end
+
+  fun ref rollback_p() ? =>
+    """
+    Partial variant of rollback(). Raises error on failure.
+    """
+    match rollback()
+    | let _: TxRollbackError => error
+    end
 
   // --- Observability ---
 

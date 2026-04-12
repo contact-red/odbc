@@ -49,6 +49,42 @@ class ref Cursor
     else FetchError(DriverFetchError)
     end
 
+  fun ref fetch_into(row: MutableRow): (MutableRow | EndOfRows | FetchError) =>
+    """
+    Fetch the next row into a reusable MutableRow.
+    """
+    if _closed then return FetchError(CursorClosed) end
+    if not _conn_alive.is_alive() then return FetchError(FetchConnectionClosed) end
+
+    let rc = @SQLFetch(_hstmt)
+
+    if rc == _ODBC.sql_no_data() then
+      return EndOfRows
+    end
+
+    _last_warnings = if _ODBC.has_info(rc) then
+      Warnings(_DiagHelper.read(_ODBC.handle_stmt(), _hstmt))
+    else
+      None
+    end
+
+    if not _ODBC.ok(rc) then
+      let diag = _DiagHelper.read(_ODBC.handle_stmt(), _hstmt)
+      return FetchError(DriverFetchError, diag)
+    end
+
+    match _col_bindings
+    | let cb: _ColumnBindings => cb.build_row_into(row)
+    else FetchError(DriverFetchError)
+    end
+
+  fun cancel_token(): CancelToken =>
+    """
+    Return a sendable token that can cancel this cursor's
+    in-progress operation from another actor.
+    """
+    CancelToken(_hstmt)
+
   fun ref values(): CursorIterator =>
     """
     Return an iterator for use with Pony's `for` loop.

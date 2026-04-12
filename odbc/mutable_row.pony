@@ -1,15 +1,19 @@
-class val Row
+class ref MutableRow
   """
-  Immutable snapshot of one fetched row. Safe to hold across fetches,
-  safe to send across actors.
+  Mutable row for zero-alloc fetch loops. Reused across fetches — column
+  values are overwritten on each fetch_into() call.
 
-  Typed accessors raise error on both out-of-range index AND type mismatch.
+  NOT sendable across actors (ref capability). For cross-actor use,
+  copy values out or use the regular Row val from fetch().
   """
 
-  let _columns: Array[SqlValue] val
+  var _columns: Array[SqlValue] ref
 
-  new val create(columns: Array[SqlValue] iso) =>
-    _columns = consume columns
+  new ref create(num_cols: USize = 0) =>
+    _columns = Array[SqlValue](num_cols)
+
+  fun ref _set_columns(columns: Array[SqlValue] ref) =>
+    _columns = columns
 
   fun column(i: ColIndex): SqlValue ? =>
     """

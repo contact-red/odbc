@@ -68,6 +68,11 @@ class ref _ColumnBindings
       | _ODBC.sql_char() => _ODBC.c_char()
       | _ODBC.sql_varchar() => _ODBC.c_char()
       | _ODBC.sql_longvarchar() => _ODBC.c_char()
+      | _ODBC.sql_type_date() => _ODBC.c_type_date()
+      | _ODBC.sql_type_time() => _ODBC.c_type_time()
+      | _ODBC.sql_type_timestamp() => _ODBC.c_type_timestamp()
+      | _ODBC.sql_numeric() => _ODBC.c_char()  // read as string
+      | _ODBC.sql_decimal() => _ODBC.c_char()  // read as string
       else
         // Unsupported type — don't bind, will produce FetchError
         _c_types.push(0)
@@ -99,8 +104,12 @@ class ref _ColumnBindings
           _indicators.cpointer(pos))
         if not _ODBC.ok(rc) then error end
       else
-        // Fixed-width column: 8 bytes covers I64 and F64; 1 byte for BIT
-        let fsize: USize = if c_type == _ODBC.c_bit() then 1 else 8 end
+        // Fixed-width column
+        let fsize: USize = if c_type == _ODBC.c_bit() then 1
+        elseif c_type == _ODBC.c_type_date() then _ODBC.date_struct_size()
+        elseif c_type == _ODBC.c_type_time() then _ODBC.time_struct_size()
+        elseif c_type == _ODBC.c_type_timestamp() then _ODBC.timestamp_struct_size()
+        else 8 end // 8 covers I64 and F64
         let fbuf = Array[U8].init(0, fsize)
 
         _fixed_bufs.push(fbuf)
@@ -136,15 +145,22 @@ class ref _ColumnBindings
         if ind == _ODBC.sql_null_data() then
           columns.push(SqlNull)
         elseif _is_text(i)? then
-          // Text: read from text buffer
           let tbuf = _text_bufs(i)?
           let len = ind.usize()
-
           let text: String val = tbuf.substring(0, len.isize())
-          if _validate_utf8 and (not _is_valid_utf8(text)) then
-            return FetchError(InvalidUtf8)
+
+          // Numeric/decimal → SqlDecimal; otherwise → SqlText
+          let sql_type = _sql_types(i)?
+          if (sql_type == _ODBC.sql_numeric())
+            or (sql_type == _ODBC.sql_decimal())
+          then
+            columns.push(SqlDecimal(text))
+          else
+            if _validate_utf8 and (not _is_valid_utf8(text)) then
+              return FetchError(InvalidUtf8)
+            end
+            columns.push(SqlText(text))
           end
-          columns.push(SqlText(text))
         else
           // Fixed-width: read from fixed buffer
           let fbuf = _fixed_bufs(i)?
@@ -160,6 +176,34 @@ class ref _ColumnBindings
             columns.push(SqlFloat(value))
           elseif c_type == _ODBC.c_bit() then
             columns.push(SqlBool(try fbuf(0)? != 0 else false end))
+          elseif c_type == _ODBC.c_type_date() then
+            // DATE_STRUCT: year(I16@0), month(U16@2), day(U16@4)
+            var yr: I16 = 0; var mo: U16 = 0; var dy: U16 = 0
+            @memcpy(addressof yr, fbuf.cpointer(), 2)
+            @memcpy(addressof mo, fbuf.cpointer(2), 2)
+            @memcpy(addressof dy, fbuf.cpointer(4), 2)
+            columns.push(SqlDate(yr, mo, dy))
+          elseif c_type == _ODBC.c_type_time() then
+            // TIME_STRUCT: hour(U16@0), minute(U16@2), second(U16@4)
+            var hr: U16 = 0; var mi: U16 = 0; var se: U16 = 0
+            @memcpy(addressof hr, fbuf.cpointer(), 2)
+            @memcpy(addressof mi, fbuf.cpointer(2), 2)
+            @memcpy(addressof se, fbuf.cpointer(4), 2)
+            columns.push(SqlTime(hr, mi, se))
+          elseif c_type == _ODBC.c_type_timestamp() then
+            // TIMESTAMP_STRUCT: year(I16@0), month(U16@2), day(U16@4),
+            //   hour(U16@6), minute(U16@8), second(U16@10), fraction(U32@12)
+            var yr: I16 = 0; var mo: U16 = 0; var dy: U16 = 0
+            var hr: U16 = 0; var mi: U16 = 0; var se: U16 = 0
+            var fr: U32 = 0
+            @memcpy(addressof yr, fbuf.cpointer(), 2)
+            @memcpy(addressof mo, fbuf.cpointer(2), 2)
+            @memcpy(addressof dy, fbuf.cpointer(4), 2)
+            @memcpy(addressof hr, fbuf.cpointer(6), 2)
+            @memcpy(addressof mi, fbuf.cpointer(8), 2)
+            @memcpy(addressof se, fbuf.cpointer(10), 2)
+            @memcpy(addressof fr, fbuf.cpointer(12), 4)
+            columns.push(SqlTimestamp(yr, mo, dy, hr, mi, se, fr))
           end
         end
       else
@@ -169,6 +213,99 @@ class ref _ColumnBindings
     end
 
     Row.create(consume columns)
+
+  fun ref build_row_into(row: MutableRow): (MutableRow | FetchError) =>
+    """
+    Overwrite a MutableRow with values from the current fetch.
+    Reuses the row object — no allocation for the row itself or its
+    column array (though SqlText/SqlDecimal values are still allocated
+    since they own their string data).
+    """
+    let columns = Array[SqlValue](_num_cols)
+
+    var i: USize = 0
+    while i < _num_cols do
+      match _read_column_value(i)
+      | let sv: SqlValue => columns.push(sv)
+      | let e: FetchError => return e
+      end
+      i = i + 1
+    end
+
+    row._set_columns(columns)
+    row
+
+  fun ref _read_column_value(i: USize): (SqlValue | FetchError) =>
+    """
+    Read the SqlValue for column i from the bound buffers.
+    """
+    try
+      if _is_unsupported(i)? then
+        return FetchError(UnsupportedColumnType)
+      end
+
+      let ind = _indicators(i)?
+
+      if ind == _ODBC.sql_null_data() then
+        return SqlNull
+      elseif _is_text(i)? then
+        let tbuf = _text_bufs(i)?
+        let len = ind.usize()
+        let text: String val = tbuf.substring(0, len.isize())
+
+        let sql_type = _sql_types(i)?
+        if (sql_type == _ODBC.sql_numeric())
+          or (sql_type == _ODBC.sql_decimal())
+        then
+          return SqlDecimal(text)
+        else
+          if _validate_utf8 and (not _is_valid_utf8(text)) then
+            return FetchError(InvalidUtf8)
+          end
+          return SqlText(text)
+        end
+      else
+        let fbuf = _fixed_bufs(i)?
+        let c_type = _c_types(i)?
+
+        if c_type == _ODBC.c_sbigint() then
+          var value: I64 = 0
+          @memcpy(addressof value, fbuf.cpointer(), 8)
+          return SqlInt(value)
+        elseif c_type == _ODBC.c_double() then
+          var value: F64 = 0
+          @memcpy(addressof value, fbuf.cpointer(), 8)
+          return SqlFloat(value)
+        elseif c_type == _ODBC.c_bit() then
+          return SqlBool(try fbuf(0)? != 0 else false end)
+        elseif c_type == _ODBC.c_type_date() then
+          var yr: I16 = 0; var mo: U16 = 0; var dy: U16 = 0
+          @memcpy(addressof yr, fbuf.cpointer(), 2)
+          @memcpy(addressof mo, fbuf.cpointer(2), 2)
+          @memcpy(addressof dy, fbuf.cpointer(4), 2)
+          return SqlDate(yr, mo, dy)
+        elseif c_type == _ODBC.c_type_time() then
+          var hr: U16 = 0; var mi: U16 = 0; var se: U16 = 0
+          @memcpy(addressof hr, fbuf.cpointer(), 2)
+          @memcpy(addressof mi, fbuf.cpointer(2), 2)
+          @memcpy(addressof se, fbuf.cpointer(4), 2)
+          return SqlTime(hr, mi, se)
+        elseif c_type == _ODBC.c_type_timestamp() then
+          var yr: I16 = 0; var mo: U16 = 0; var dy: U16 = 0
+          var hr: U16 = 0; var mi: U16 = 0; var se: U16 = 0
+          var fr: U32 = 0
+          @memcpy(addressof yr, fbuf.cpointer(), 2)
+          @memcpy(addressof mo, fbuf.cpointer(2), 2)
+          @memcpy(addressof dy, fbuf.cpointer(4), 2)
+          @memcpy(addressof hr, fbuf.cpointer(6), 2)
+          @memcpy(addressof mi, fbuf.cpointer(8), 2)
+          @memcpy(addressof se, fbuf.cpointer(10), 2)
+          @memcpy(addressof fr, fbuf.cpointer(12), 4)
+          return SqlTimestamp(yr, mo, dy, hr, mi, se, fr)
+        end
+      end
+    end
+    FetchError(DriverFetchError)
 
   fun _is_valid_utf8(s: String box): Bool =>
     """

@@ -55,6 +55,9 @@ use @SQLRowCount[I16](stmt: Pointer[None] tag,
   row_count: Pointer[None] tag)
 use @SQLFreeStmt[I16](stmt: Pointer[None] tag, option: U16)
 
+// Cancellation
+use @SQLCancel[I16](stmt: Pointer[None] tag)
+
 // C stdlib
 use @memcpy[Pointer[None] tag](dst: Pointer[None] tag, src: Pointer[None] tag,
   n: USize)
@@ -105,6 +108,9 @@ primitive _ODBC
   fun c_sbigint(): I16 => -25
   fun c_double(): I16 => 8
   fun c_bit(): I16 => -7
+  fun c_type_date(): I16 => 91
+  fun c_type_time(): I16 => 92
+  fun c_type_timestamp(): I16 => 93
 
   // SQL data types
   fun sql_char(): I16 => 1
@@ -119,6 +125,14 @@ primitive _ODBC
   fun sql_bit(): I16 => -7
   fun sql_numeric(): I16 => 2
   fun sql_decimal(): I16 => 3
+  fun sql_type_date(): I16 => 91
+  fun sql_type_time(): I16 => 92
+  fun sql_type_timestamp(): I16 => 93
+
+  // Struct sizes (bytes)
+  fun date_struct_size(): USize => 6
+  fun time_struct_size(): USize => 6
+  fun timestamp_struct_size(): USize => 16
 
   // SQLFreeStmt options
   fun sql_close_cursor(): U16 => 0

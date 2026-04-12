@@ -1,4 +1,5 @@
 use "pony_test"
+use "promises"
 use ".."
 
 primitive _TestDsn
@@ -529,3 +530,306 @@ class iso _StatementValuesTest is UnitTest
       _TestSetup.exec(conn, "DROP TABLE IF EXISTS _test_siter", h)
       conn.close()
     end
+
+
+class iso _DateTimeTypesTest is UnitTest
+  fun name(): String => "integration: date/time/timestamp types"
+
+  fun apply(h: TestHelper) =>
+    try
+      let conn = _TestSetup.connect(h)?
+      _TestSetup.exec(conn, "DROP TABLE IF EXISTS _test_dt", h)
+      _TestSetup.exec(conn,
+        "CREATE TABLE _test_dt (d DATE, t TIME, ts TIMESTAMP)", h)
+      _TestSetup.exec(conn,
+        "INSERT INTO _test_dt VALUES ('2025-06-15', '14:30:45', '2025-06-15 14:30:45')", h)
+
+      match conn.query("SELECT d, t, ts FROM _test_dt")
+      | let cursor: Cursor =>
+        match cursor.fetch()
+        | let row: Row =>
+          try
+            match row.date(ColIndex(1))?
+            | let d: SqlDate =>
+              h.assert_eq[I16](2025, d.year)
+              h.assert_eq[U16](6, d.month)
+              h.assert_eq[U16](15, d.day)
+            | SqlNull => h.fail("date was null")
+            end
+
+            match row.time(ColIndex(2))?
+            | let t: SqlTime =>
+              h.assert_eq[U16](14, t.hour)
+              h.assert_eq[U16](30, t.minute)
+              h.assert_eq[U16](45, t.second)
+            | SqlNull => h.fail("time was null")
+            end
+
+            match row.timestamp(ColIndex(3))?
+            | let ts: SqlTimestamp =>
+              h.assert_eq[I16](2025, ts.year)
+              h.assert_eq[U16](6, ts.month)
+              h.assert_eq[U16](15, ts.day)
+              h.assert_eq[U16](14, ts.hour)
+              h.assert_eq[U16](30, ts.minute)
+              h.assert_eq[U16](45, ts.second)
+            | SqlNull => h.fail("timestamp was null")
+            end
+          else
+            h.fail("column read error")
+          end
+        | EndOfRows => h.fail("no rows")
+        | let e: FetchError => h.fail("fetch: " + e.string())
+        end
+        cursor.close()
+      | let e: ExecError => h.fail("query: " + e.string())
+      end
+
+      _TestSetup.exec(conn, "DROP TABLE IF EXISTS _test_dt", h)
+      conn.close()
+    end
+
+
+class iso _DecimalTypesTest is UnitTest
+  fun name(): String => "integration: decimal/numeric types"
+
+  fun apply(h: TestHelper) =>
+    try
+      let conn = _TestSetup.connect(h)?
+      _TestSetup.exec(conn, "DROP TABLE IF EXISTS _test_dec", h)
+      _TestSetup.exec(conn,
+        "CREATE TABLE _test_dec (price NUMERIC(10,2), amount DECIMAL(15,4))", h)
+      _TestSetup.exec(conn,
+        "INSERT INTO _test_dec VALUES (123.45, 9876543.2100)", h)
+
+      match conn.query("SELECT price, amount FROM _test_dec")
+      | let cursor: Cursor =>
+        match cursor.fetch()
+        | let row: Row =>
+          try
+            match row.decimal(ColIndex(1))?
+            | let d: SqlDecimal =>
+              h.assert_true(d.value.contains("123.45"),
+                "expected 123.45 in: " + d.value)
+            | SqlNull => h.fail("price was null")
+            end
+
+            match row.decimal(ColIndex(2))?
+            | let d: SqlDecimal =>
+              h.assert_true(d.value.contains("9876543.21"),
+                "expected 9876543.21 in: " + d.value)
+            | SqlNull => h.fail("amount was null")
+            end
+          else
+            h.fail("column read error")
+          end
+        | EndOfRows => h.fail("no rows")
+        | let e: FetchError => h.fail("fetch: " + e.string())
+        end
+        cursor.close()
+      | let e: ExecError => h.fail("query: " + e.string())
+      end
+
+      _TestSetup.exec(conn, "DROP TABLE IF EXISTS _test_dec", h)
+      conn.close()
+    end
+
+
+class iso _FetchIntoTest is UnitTest
+  fun name(): String => "integration: fetch_into reuses MutableRow"
+
+  fun apply(h: TestHelper) =>
+    try
+      let conn = _TestSetup.connect(h)?
+      _TestSetup.exec(conn, "DROP TABLE IF EXISTS _test_fi", h)
+      _TestSetup.exec(conn,
+        "CREATE TABLE _test_fi (id INTEGER, name VARCHAR(32))", h)
+      _TestSetup.exec(conn, "INSERT INTO _test_fi VALUES (1, 'one')", h)
+      _TestSetup.exec(conn, "INSERT INTO _test_fi VALUES (2, 'two')", h)
+      _TestSetup.exec(conn, "INSERT INTO _test_fi VALUES (3, 'three')", h)
+
+      match conn.query("SELECT id, name FROM _test_fi ORDER BY id")
+      | let cursor: Cursor =>
+        let row = MutableRow
+        var count: USize = 0
+
+        while true do
+          match cursor.fetch_into(row)
+          | let r: MutableRow =>
+            count = count + 1
+            try
+              match r.int(ColIndex(1))?
+              | let v: I64 => h.assert_eq[I64](count.i64(), v)
+              else h.fail("null id")
+              end
+            else
+              h.fail("column read error")
+            end
+          | EndOfRows => break
+          | let e: FetchError => h.fail("fetch: " + e.string()); break
+          end
+        end
+
+        h.assert_eq[USize](3, count, "expected 3 rows")
+        // Verify the row still holds the last fetched data
+        try
+          match row.text(ColIndex(2))?
+          | let v: String val => h.assert_eq[String val]("three", v)
+          else h.fail("last row name was null")
+          end
+        else
+          h.fail("last row read error")
+        end
+
+        cursor.close()
+      | let e: ExecError => h.fail("query: " + e.string())
+      end
+
+      _TestSetup.exec(conn, "DROP TABLE IF EXISTS _test_fi", h)
+      conn.close()
+    end
+
+
+class iso _PartialFunctionTest is UnitTest
+  fun name(): String => "integration: partial function variants"
+
+  fun apply(h: TestHelper) =>
+    try
+      let conn = _TestSetup.connect(h)?
+
+      // Chain DDL with try/else
+      try
+        conn.exec_p("DROP TABLE IF EXISTS _test_pf")?
+        conn.exec_p("CREATE TABLE _test_pf (id INTEGER, name VARCHAR(32))")?
+        conn.exec_p("INSERT INTO _test_pf VALUES (1, 'alice')")?
+        conn.exec_p("INSERT INTO _test_pf VALUES (2, 'bob')")?
+      else
+        h.fail("DDL chain failed")
+        conn.close()
+        return
+      end
+
+      // Prepared statement with partial variants
+      try
+        let stmt = conn.prepare_p("INSERT INTO _test_pf VALUES (?, ?)")?
+        stmt.bind_p(ParamIndex(1), SqlInt(3))?
+        stmt.bind_p(ParamIndex(2), SqlText("carol"))?
+        stmt.execute_update_p()?
+
+        stmt.bind_p(ParamIndex(1), SqlInt(4))?
+        stmt.bind_p(ParamIndex(2), SqlText("dave"))?
+        stmt.execute_update_p()?
+        stmt.close()
+      else
+        h.fail("prepared chain failed")
+      end
+
+      // Transaction with partial variants
+      try
+        conn.begin_p()?
+        conn.exec_p("INSERT INTO _test_pf VALUES (5, 'eve')")?
+        conn.commit_p()?
+      else
+        h.fail("transaction chain failed")
+      end
+
+      // Verify all 5 rows
+      try
+        let cursor = conn.query_p("SELECT COUNT(*) FROM _test_pf")?
+        for row in cursor.values() do
+          try
+            match row.int(ColIndex(1))?
+            | let v: I64 => h.assert_eq[I64](5, v)
+            else h.fail("null count")
+            end
+          else
+            h.fail("count read error")
+          end
+        end
+        cursor.close()
+      else
+        h.fail("count query failed")
+      end
+
+      // Verify bad SQL raises error in partial variant
+      try
+        conn.exec_p("THIS IS NOT VALID SQL")?
+        h.fail("bad SQL should have raised error")
+      end
+
+      conn.exec_p("DROP TABLE IF EXISTS _test_pf")?
+      conn.close()
+    end
+
+
+class iso _DbSessionTest is UnitTest
+  fun name(): String => "integration: DbSession actor with promises"
+
+  fun apply(h: TestHelper) =>
+    h.long_test(5_000_000_000) // 5 second timeout
+
+    let dsn = _TestDsn.dsn(h)
+    let db = DbSession(dsn)
+
+    // Chain: drop → create → insert → query → verify → cleanup
+    let p_drop = Promise[(RowCount | ExecError)]
+    db.exec("DROP TABLE IF EXISTS _test_session", p_drop)
+
+    p_drop.next[None](
+      {(result: (RowCount | ExecError))(db, h) =>
+        let p_create = Promise[(RowCount | ExecError)]
+        db.exec("CREATE TABLE _test_session (id INTEGER, name VARCHAR(32))",
+          p_create)
+
+        p_create.next[None](
+          {(result: (RowCount | ExecError))(db, h) =>
+            match result
+            | let _: ExecError =>
+              h.fail("create failed")
+              h.complete(false)
+              return
+            end
+
+            let p_ins = Promise[(RowCount | ExecError)]
+            db.exec(
+              "INSERT INTO _test_session VALUES (1, 'promise')", p_ins)
+
+            p_ins.next[None](
+              {(result: (RowCount | ExecError))(db, h) =>
+                let p_query = Promise[(Array[Row val] val | ExecError)]
+                db.query("SELECT id, name FROM _test_session", p_query)
+
+                p_query.next[None](
+                  {(result: (Array[Row val] val | ExecError))(db, h) =>
+                    match result
+                    | let rows: Array[Row val] val =>
+                      h.assert_eq[USize](1, rows.size())
+                      try
+                        match rows(0)?.int(ColIndex(1))?
+                        | let v: I64 => h.assert_eq[I64](1, v)
+                        else h.fail("null id")
+                        end
+                        match rows(0)?.text(ColIndex(2))?
+                        | let v: String val =>
+                          h.assert_eq[String val]("promise", v)
+                        else h.fail("null name")
+                        end
+                      else
+                        h.fail("row read error")
+                      end
+                    | let e: ExecError =>
+                      h.fail("query: " + e.string())
+                    end
+
+                    // Cleanup
+                    let p_cleanup = Promise[(RowCount | ExecError)]
+                    db.exec("DROP TABLE IF EXISTS _test_session", p_cleanup)
+                    p_cleanup.next[None](
+                      {(result: (RowCount | ExecError))(db, h) =>
+                        db.close()
+                        h.complete(true)
+                      })
+                  })
+              })
+          })
+      })

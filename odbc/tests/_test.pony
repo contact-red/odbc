@@ -33,3 +33,8 @@ actor Main is TestList
     test(_DoubleCloseTest)
     test(_CursorValuesTest)
     test(_StatementValuesTest)
+    test(_DateTimeTypesTest)
+    test(_DecimalTypesTest)
+    test(_FetchIntoTest)
+    test(_PartialFunctionTest)
+    test(_DbSessionTest)

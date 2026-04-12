@@ -122,6 +122,22 @@ class ref Statement
   fun ref bind_null(i: ParamIndex): (None | BindError) =>
     bind(i, SqlNull)
 
+  fun ref bind_p(i: ParamIndex, v: SqlValue) ? =>
+    """
+    Partial variant of bind(). Raises error on failure.
+    """
+    match bind(i, v)
+    | let _: BindError => error
+    end
+
+  fun ref bind_null_p(i: ParamIndex) ? =>
+    """
+    Partial variant of bind_null(). Raises error on failure.
+    """
+    match bind_null(i)
+    | let _: BindError => error
+    end
+
   // --- Execution ---
 
   fun ref execute(): (None | ExecError) =>
@@ -305,12 +321,67 @@ class ref Statement
     else FetchError(DriverFetchError)
     end
 
+  fun ref execute_p() ? =>
+    """
+    Partial variant of execute(). Raises error on failure.
+    """
+    match execute()
+    | let _: ExecError => error
+    end
+
+  fun ref execute_update_p(): RowCount ? =>
+    """
+    Partial variant of execute_update(). Raises error on failure.
+    """
+    match execute_update()
+    | let rc: RowCount => rc
+    | let _: ExecError => error
+    end
+
+  fun ref fetch_into(row: MutableRow): (MutableRow | EndOfRows | FetchError) =>
+    """
+    Fetch the next row into a reusable MutableRow. Zero allocation for
+    the row container (SqlText/SqlDecimal values still allocate strings).
+    """
+    if _closed then return FetchError(CursorClosed) end
+    if not _conn_alive.is_alive() then return FetchError(FetchConnectionClosed) end
+    if not _cursor_open then return FetchError(CursorClosed) end
+
+    let rc = @SQLFetch(_hstmt)
+
+    if rc == _ODBC.sql_no_data() then
+      return EndOfRows
+    end
+
+    _last_warnings = if _ODBC.has_info(rc) then
+      Warnings(_DiagHelper.read(_ODBC.handle_stmt(), _hstmt))
+    else
+      None
+    end
+
+    if not _ODBC.ok(rc) then
+      let diag = _DiagHelper.read(_ODBC.handle_stmt(), _hstmt)
+      return FetchError(DriverFetchError, diag)
+    end
+
+    match _col_bindings
+    | let cb: _ColumnBindings => cb.build_row_into(row)
+    else FetchError(DriverFetchError)
+    end
+
   fun ref values(): StatementIterator =>
     """
     Return an iterator for use with Pony's `for` loop.
     FetchError during iteration raises error from next().
     """
     StatementIterator(this)
+
+  fun cancel_token(): CancelToken =>
+    """
+    Return a sendable token that can cancel this statement's
+    in-progress operation from another actor.
+    """
+    CancelToken(_hstmt)
 
   // --- Cursor management ---
 
