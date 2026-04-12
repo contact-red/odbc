@@ -3,10 +3,11 @@ primitive Odbc
   Entry point for ODBC connections.
   """
 
-  fun connect(dsn: Dsn): (Connection | ConnectError) =>
+  fun connect(dsn: Dsn, validate_utf8: Bool = true): (Connection | ConnectError) =>
     """
     Connect to an ODBC data source. Each Connection owns its own
     SQLHENV (no shared environment handle across connections).
+    Set validate_utf8 to false to skip UTF-8 validation on text columns.
     """
 
     // Allocate environment handle
@@ -57,7 +58,7 @@ primitive Odbc
       None
     end
 
-    Connection._create(henv, hdbc, warnings)
+    Connection._create(henv, hdbc, warnings, validate_utf8)
 
 
 class ref Connection
@@ -72,15 +73,18 @@ class ref Connection
   var _in_tx: Bool
   let _alive: _AliveFlag
   var _last_warnings: (Warnings | None)
+  let _validate_utf8: Bool
 
   new ref _create(henv: Pointer[None] tag, hdbc: Pointer[None] tag,
-    warnings: (Warnings | None) = None) =>
+    warnings: (Warnings | None) = None,
+    validate_utf8: Bool = true) =>
     _henv = henv
     _hdbc = hdbc
     _closed = false
     _in_tx = false
     _alive = _AliveFlag
     _last_warnings = warnings
+    _validate_utf8 = validate_utf8
 
   // --- DDL/DML ---
 
@@ -165,7 +169,7 @@ class ref Connection
     var num_params: I16 = 0
     @SQLNumParams(hstmt, addressof num_params)
 
-    Statement._create(hstmt, num_params.u16(), _alive)
+    Statement._create(hstmt, num_params.u16(), _alive, _validate_utf8)
 
   // --- Ad-hoc SELECT ---
 
@@ -199,7 +203,7 @@ class ref Connection
       return ExecError(ExecErrorClassifier.classify(diag), diag, sql)
     end
 
-    Cursor._create(hstmt, _alive)
+    Cursor._create(hstmt, _alive, _validate_utf8)
 
   // --- Transactions ---
 

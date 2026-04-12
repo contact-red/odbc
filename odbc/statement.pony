@@ -22,9 +22,10 @@ class ref Statement
 
   // Column bindings — created on first execute(), reused across fetches
   var _col_bindings: (_ColumnBindings | None)
+  let _validate_utf8: Bool
 
   new ref _create(hstmt: Pointer[None] tag, param_count: U16,
-    conn_alive: _AliveFlag ref) =>
+    conn_alive: _AliveFlag ref, validate_utf8: Bool = true) =>
     _hstmt = hstmt
     _param_count = param_count
     _conn_alive = conn_alive
@@ -34,6 +35,7 @@ class ref Statement
     _params_bound_to_odbc = false
     _needs_rebind = false
     _col_bindings = None
+    _validate_utf8 = validate_utf8
 
     let n = param_count.usize()
     _bound_flags = Array[Bool].init(false, n)
@@ -156,7 +158,7 @@ class ref Statement
 
     // Set up column bindings for fetching
     try
-      _col_bindings = _ColumnBindings(_hstmt)?
+      _col_bindings = _ColumnBindings(_hstmt, _validate_utf8)?
     else
       // Column binding failed — still have a cursor, just can't fetch
       let diag = _DiagHelper.read(_ODBC.handle_stmt(), _hstmt)

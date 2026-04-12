@@ -18,8 +18,11 @@ class ref _ColumnBindings
   let _is_text: Array[Bool] ref
   // Whether column type is unsupported
   let _is_unsupported: Array[Bool] ref
+  let _validate_utf8: Bool
 
-  new ref create(hstmt: Pointer[None] tag) ? =>
+  new ref create(hstmt: Pointer[None] tag,
+    validate_utf8: Bool = true) ? =>
+    _validate_utf8 = validate_utf8
     var nc: I16 = 0
     @SQLNumResultCols(hstmt, addressof nc)
     _num_cols = nc.usize()
@@ -137,9 +140,8 @@ class ref _ColumnBindings
           let tbuf = _text_bufs(i)?
           let len = ind.usize()
 
-          // Validate UTF-8
           let text: String val = tbuf.substring(0, len.isize())
-          if not _is_valid_utf8(text) then
+          if _validate_utf8 and (not _is_valid_utf8(text)) then
             return FetchError(InvalidUtf8)
           end
           columns.push(SqlText(text))

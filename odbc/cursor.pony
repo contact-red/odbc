@@ -11,13 +11,14 @@ class ref Cursor
   var _last_warnings: (Warnings | None)
   var _col_bindings: (_ColumnBindings | None)
 
-  new ref _create(hstmt: Pointer[None] tag, conn_alive: _AliveFlag ref) =>
+  new ref _create(hstmt: Pointer[None] tag, conn_alive: _AliveFlag ref,
+    validate_utf8: Bool = true) =>
     _hstmt = hstmt
     _conn_alive = conn_alive
     _closed = false
     _last_warnings = None
     // Set up column bindings immediately — cursor is already open
-    _col_bindings = try _ColumnBindings(hstmt)? else None end
+    _col_bindings = try _ColumnBindings(hstmt, validate_utf8)? else None end
 
   fun ref fetch(): (Row | EndOfRows | FetchError) =>
     """
