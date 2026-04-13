@@ -112,12 +112,3 @@ actor DbSession
     match _conn
     | let conn: Connection => conn.close()
     end
-
-  be cancel_token(promise: Promise[CancelToken]) =>
-    """
-    This is not useful in the actor model — the actor serializes all
-    operations so there's nothing to cancel from within. CancelToken
-    is only useful when the raw Statement/Cursor is held directly.
-    Included for completeness.
-    """
-    None

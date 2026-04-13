@@ -259,7 +259,15 @@ class ref Connection
         ExecErrorClassifier.classify(diag), diag, sql)
     end
 
-    Cursor._create(hstmt, _alive, _validate_utf8)
+    try
+      Cursor._create(hstmt, _alive, _validate_utf8)?
+    else
+      // Column binding failed — close cursor and free handle
+      @SQLFreeStmt(hstmt, _ODBC.sql_close_cursor())
+      let diag = _DiagHelper.read(_ODBC.handle_stmt(), hstmt)
+      @SQLFreeHandle(_ODBC.handle_stmt(), hstmt)
+      ExecError(ExecErrorClassifier.classify(diag), diag, sql)
+    end
 
   fun ref query_p(sql: String val): Cursor ? =>
     """
