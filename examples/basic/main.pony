@@ -50,7 +50,7 @@ actor Main
       match \exhaustive\ conn.query(sel)
       | let cursor: Cursor =>
         for result in cursor.values() do
-          match result
+          match \exhaustive\ result
           | let row: Row =>
             try
               let id =
