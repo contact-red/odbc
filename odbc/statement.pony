@@ -222,7 +222,9 @@ class ref Statement
     try
       _col_bindings = _ColumnBindings(_hstmt, _validate_utf8)?
     else
-      // Column binding failed — still have a cursor, just can't fetch
+      // Column binding failed — close the driver-level cursor so the
+      // statement can be reused via close_cursor() / re-execute.
+      @SQLFreeStmt(_hstmt, _ODBC.sql_close_cursor())
       let diag = _DiagHelper.read(_ODBC.handle_stmt(), _hstmt)
       return ExecError(ExecErrorClassifier.classify(diag), diag)
     end
