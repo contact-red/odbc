@@ -58,7 +58,7 @@ class ref Statement
     end
     None
 
-  fun ref bind(i: ParamIndex, v: SqlValue): (None | BindError) =>
+  fun ref bind(i: ParamIndex, v: SqlValue): (Bound | BindError) =>
     """
     Write value into parameter scratch slot. Atomic per param.
     """
@@ -164,9 +164,9 @@ class ref Statement
     else
       return BindError(ParamIndexOutOfRange, i)
     end
-    None
+    Bound
 
-  fun ref bind_null(i: ParamIndex): (None | BindError) =>
+  fun ref bind_null(i: ParamIndex): (Bound | BindError) =>
     bind(i, SqlNull)
 
   fun ref bind_p(i: ParamIndex, v: SqlValue) ? =>
@@ -185,7 +185,7 @@ class ref Statement
     | let _: BindError => error
     end
 
-  fun ref execute(): (None | ExecError) =>
+  fun ref execute(): (Executed | ExecError) =>
     """
     Execute a prepared SELECT, opening a cursor.
     """
@@ -230,7 +230,7 @@ class ref Statement
     end
 
     _cursor_open = true
-    None
+    Executed
 
   fun ref execute_update(): (RowCount | ExecError) =>
     """
@@ -268,7 +268,7 @@ class ref Statement
     var row_count: I64 = 0
     @SQLRowCount(_hstmt, addressof row_count)
     if row_count == _ODBC.sql_no_row_count() then
-      None
+      NoRowCount
     else
       row_count.usize()
     end

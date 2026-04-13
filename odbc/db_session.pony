@@ -75,7 +75,7 @@ actor DbSession
         ConnectionClosed, recover val Array[DiagRecord] end, sql))
     end
 
-  be begin(promise: Promise[(None | TxBeginError)]) =>
+  be begin(promise: Promise[(TxBegun | TxBeginError)]) =>
     """
     Begin a transaction.
     """
@@ -85,7 +85,7 @@ actor DbSession
       promise(TxBeginError(TxBeginConnectionClosed))
     end
 
-  be commit(promise: Promise[(None | TxCommitError)]) =>
+  be commit(promise: Promise[(TxCommitted | TxCommitError)]) =>
     """
     Commit the current transaction.
     """
@@ -95,7 +95,7 @@ actor DbSession
       promise(TxCommitError(NotInTransaction))
     end
 
-  be rollback(promise: Promise[(None | TxRollbackError)]) =>
+  be rollback(promise: Promise[(TxRolledBack | TxRollbackError)]) =>
     """
     Rollback the current transaction.
     """

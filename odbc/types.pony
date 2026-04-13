@@ -42,10 +42,40 @@ class val ColIndex
   fun string(): String iso^ =>
     _n.string()
 
-type RowCount is (USize | None)
+type RowCount is (USize | NoRowCount)
   """
   Result of exec/execute_update. USize is affected row count.
-  None means the driver returned SQL_NO_ROW_COUNT (-1).
+  NoRowCount means the driver returned SQL_NO_ROW_COUNT (-1).
+  """
+
+primitive NoRowCount
+  """
+  The driver did not report an affected row count.
+  """
+
+primitive Executed
+  """
+  Statement executed successfully (cursor opened for fetching).
+  """
+
+primitive Bound
+  """
+  Parameter value bound successfully.
+  """
+
+primitive TxBegun
+  """
+  Transaction started successfully.
+  """
+
+primitive TxCommitted
+  """
+  Transaction committed successfully.
+  """
+
+primitive TxRolledBack
+  """
+  Transaction rolled back successfully.
   """
 
 primitive EndOfRows

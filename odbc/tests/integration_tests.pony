@@ -54,13 +54,13 @@ class iso _ExecDdlTest is UnitTest
 
       match \exhaustive\ conn.exec("CREATE TABLE _test_ddl (id INTEGER)")
       | let n: USize => None // some drivers return 0
-      | None => None         // some return no row count
+      | NoRowCount => None    // some return no row count
       | let e: ExecError => h.fail("create: " + e.string())
       end
 
       match \exhaustive\ conn.exec("INSERT INTO _test_ddl VALUES (1)")
       | let n: USize => h.assert_eq[USize](1, n)
-      | None => None
+      | NoRowCount => None
       | let e: ExecError => h.fail("insert: " + e.string())
       end
 
@@ -195,7 +195,7 @@ class iso _PreparedStatementTest is UnitTest
         end
         match \exhaustive\ stmt.execute_update()
         | let n: USize => h.assert_eq[USize](1, n)
-        | None => None
+        | NoRowCount => None
         | let e: ExecError => h.fail("exec1: " + e.string())
         end
 
@@ -208,7 +208,7 @@ class iso _PreparedStatementTest is UnitTest
         end
         match \exhaustive\ stmt.execute_update()
         | let n: USize => h.assert_eq[USize](1, n)
-        | None => None
+        | NoRowCount => None
         | let e: ExecError => h.fail("exec2: " + e.string())
         end
 
@@ -798,7 +798,7 @@ class iso _BindDateTimeDecimalTest is UnitTest
         end
         match \exhaustive\ stmt.execute_update()
         | let n: USize => h.assert_eq[USize](1, n)
-        | None => None
+        | NoRowCount => None
         | let e: ExecError => h.fail("exec: " + e.string())
         end
         stmt.close()

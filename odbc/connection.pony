@@ -152,7 +152,7 @@ class ref Connection
     @SQLFreeHandle(_ODBC.handle_stmt(), hstmt)
 
     if row_count == _ODBC.sql_no_row_count() then
-      None
+      NoRowCount
     else
       row_count.usize()
     end
@@ -278,7 +278,7 @@ class ref Connection
     | let _: ExecError => error
     end
 
-  fun ref begin(): (None | TxBeginError) =>
+  fun ref begin(): (TxBegun | TxBeginError) =>
     """
     Set autocommit off. Returns error if already in a transaction
     or if the connection is closed.
@@ -308,9 +308,9 @@ class ref Connection
       end
 
     _in_tx = true
-    None
+    TxBegun
 
-  fun ref commit(): (None | TxCommitError) =>
+  fun ref commit(): (TxCommitted | TxCommitError) =>
     """
     Commit the current transaction and re-enable autocommit.
     """
@@ -367,9 +367,9 @@ class ref Connection
       else
         None
       end
-    None
+    TxCommitted
 
-  fun ref rollback(): (None | TxRollbackError) =>
+  fun ref rollback(): (TxRolledBack | TxRollbackError) =>
     """
     Rollback the current transaction and re-enable autocommit.
     """
@@ -401,7 +401,7 @@ class ref Connection
       else
         None
       end
-    None
+    TxRolledBack
 
   fun ref begin_p() ? =>
     """

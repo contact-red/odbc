@@ -26,7 +26,7 @@ actor Main
       match \exhaustive\ conn.exec(ct)
       | let _: USize =>
         env.out.print("Created table")
-      | None =>
+      | NoRowCount =>
         env.out.print("Created table (no row count)")
       | let e: ExecError =>
         env.err.print("create: " + e.string())
@@ -40,7 +40,7 @@ actor Main
       match \exhaustive\ conn.exec(ins)
       | let n: USize =>
         env.out.print("Inserted " + n.string() + " row")
-      | None => None
+      | NoRowCount => None
       | let e: ExecError =>
         env.err.print("insert: " + e.string())
       end
