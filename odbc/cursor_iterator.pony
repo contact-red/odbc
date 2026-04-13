@@ -21,7 +21,7 @@ class ref CursorIterator is Iterator[Row val]
     _error on FetchError.
     """
     if _done or _error then return end
-    match _cursor.fetch()
+    match \exhaustive\ _cursor.fetch()
     | let row: Row => _next_row = row
     | EndOfRows => _done = true; _next_row = None
     | let _: FetchError => _error = true; _next_row = None

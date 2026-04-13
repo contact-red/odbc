@@ -17,7 +17,7 @@ class ref StatementIterator is Iterator[Row val]
 
   fun ref _prefetch() =>
     if _done or _error then return end
-    match _stmt.fetch()
+    match \exhaustive\ _stmt.fetch()
     | let row: Row => _next_row = row
     | EndOfRows => _done = true; _next_row = None
     | let _: FetchError => _error = true; _next_row = None

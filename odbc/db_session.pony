@@ -33,7 +33,7 @@ actor DbSession
     """
     Execute DDL/DML and fulfill the promise with the result.
     """
-    match _conn
+    match \exhaustive\ _conn
     | let conn: Connection =>
       promise(conn.exec(sql))
     | let e: ConnectError =>
@@ -48,13 +48,13 @@ actor DbSession
     Fetches all rows into memory — for large result sets, use
     query_each() instead.
     """
-    match _conn
+    match \exhaustive\ _conn
     | let conn: Connection =>
-      match conn.query(sql)
+      match \exhaustive\ conn.query(sql)
       | let cursor: Cursor =>
         let rows = recover iso Array[Row val] end
         while true do
-          match cursor.fetch()
+          match \exhaustive\ cursor.fetch()
           | let row: Row => rows.push(row)
           | EndOfRows => break
           | let e: FetchError =>
@@ -78,7 +78,7 @@ actor DbSession
     """
     Begin a transaction.
     """
-    match _conn
+    match \exhaustive\ _conn
     | let conn: Connection => promise(conn.begin())
     | let _: ConnectError =>
       promise(TxBeginError(TxBeginConnectionClosed))
@@ -88,7 +88,7 @@ actor DbSession
     """
     Commit the current transaction.
     """
-    match _conn
+    match \exhaustive\ _conn
     | let conn: Connection => promise(conn.commit())
     | let _: ConnectError =>
       promise(TxCommitError(NotInTransaction))
@@ -98,7 +98,7 @@ actor DbSession
     """
     Rollback the current transaction.
     """
-    match _conn
+    match \exhaustive\ _conn
     | let conn: Connection => promise(conn.rollback())
     | let _: ConnectError =>
       promise(TxRollbackError(RollbackNotInTransaction))

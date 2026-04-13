@@ -22,7 +22,7 @@ primitive _TestDsn
 
 primitive _TestSetup
   fun connect(h: TestHelper): Connection ? =>
-    match Odbc.connect(_TestDsn.dsn(h))
+    match \exhaustive\ Odbc.connect(_TestDsn.dsn(h))
     | let c: Connection => c
     | let e: ConnectError =>
       h.fail("connect: " + e.string())
@@ -55,13 +55,13 @@ class iso _ExecDdlTest is UnitTest
       let conn = _TestSetup.connect(h)?
       _TestSetup.exec(conn, "DROP TABLE IF EXISTS _test_ddl", h)
 
-      match conn.exec("CREATE TABLE _test_ddl (id INTEGER)")
+      match \exhaustive\ conn.exec("CREATE TABLE _test_ddl (id INTEGER)")
       | let n: USize => None // some drivers return 0
       | None => None         // some return no row count
       | let e: ExecError => h.fail("create: " + e.string())
       end
 
-      match conn.exec("INSERT INTO _test_ddl VALUES (1)")
+      match \exhaustive\ conn.exec("INSERT INTO _test_ddl VALUES (1)")
       | let n: USize => h.assert_eq[USize](1, n)
       | None => None
       | let e: ExecError => h.fail("insert: " + e.string())
@@ -84,9 +84,9 @@ class iso _QueryRoundtripTest is UnitTest
       _TestSetup.exec(conn,
         "INSERT INTO _test_types VALUES (42, 9000000000, 3.14, 'hello world')", h)
 
-      match conn.query("SELECT i, b, f, t FROM _test_types")
+      match \exhaustive\ conn.query("SELECT i, b, f, t FROM _test_types")
       | let cursor: Cursor =>
-        match cursor.fetch()
+        match \exhaustive\ cursor.fetch()
         | let row: Row =>
           try
             // Integer
@@ -144,9 +144,9 @@ class iso _NullRoundtripTest is UnitTest
       _TestSetup.exec(conn,
         "INSERT INTO _test_null VALUES (NULL, NULL)", h)
 
-      match conn.query("SELECT a, b FROM _test_null")
+      match \exhaustive\ conn.query("SELECT a, b FROM _test_null")
       | let cursor: Cursor =>
-        match cursor.fetch()
+        match \exhaustive\ cursor.fetch()
         | let row: Row =>
           try
             h.assert_true(row.is_null(ColIndex(1))?, "col 1 should be null")
@@ -186,7 +186,7 @@ class iso _PreparedStatementTest is UnitTest
       _TestSetup.exec(conn,
         "CREATE TABLE _test_prep (id INTEGER, name VARCHAR(64))", h)
 
-      match conn.prepare("INSERT INTO _test_prep VALUES (?, ?)")
+      match \exhaustive\ conn.prepare("INSERT INTO _test_prep VALUES (?, ?)")
       | let stmt: Statement =>
         // First insert
         match stmt.bind(ParamIndex(1), SqlInt(1))
@@ -195,7 +195,7 @@ class iso _PreparedStatementTest is UnitTest
         match stmt.bind(ParamIndex(2), SqlText("alice"))
         | let e: BindError => h.fail("bind2: " + e.string())
         end
-        match stmt.execute_update()
+        match \exhaustive\ stmt.execute_update()
         | let n: USize => h.assert_eq[USize](1, n)
         | None => None
         | let e: ExecError => h.fail("exec1: " + e.string())
@@ -208,7 +208,7 @@ class iso _PreparedStatementTest is UnitTest
         match stmt.bind(ParamIndex(2), SqlText("bob"))
         | let e: BindError => h.fail("rebind2: " + e.string())
         end
-        match stmt.execute_update()
+        match \exhaustive\ stmt.execute_update()
         | let n: USize => h.assert_eq[USize](1, n)
         | None => None
         | let e: ExecError => h.fail("exec2: " + e.string())
@@ -219,7 +219,7 @@ class iso _PreparedStatementTest is UnitTest
       end
 
       // Verify both rows exist
-      match conn.query("SELECT id, name FROM _test_prep ORDER BY id")
+      match \exhaustive\ conn.query("SELECT id, name FROM _test_prep ORDER BY id")
       | let cursor: Cursor =>
         match cursor.fetch()
         | let row: Row =>
@@ -262,7 +262,7 @@ class iso _StatementReuseTest is UnitTest
       _TestSetup.exec(conn, "INSERT INTO _test_reuse VALUES (1, 'one')", h)
       _TestSetup.exec(conn, "INSERT INTO _test_reuse VALUES (2, 'two')", h)
 
-      match conn.prepare("SELECT val FROM _test_reuse WHERE id = ?")
+      match \exhaustive\ conn.prepare("SELECT val FROM _test_reuse WHERE id = ?")
       | let stmt: Statement =>
         // First query: id=1
         match stmt.bind(ParamIndex(1), SqlInt(1))
@@ -326,7 +326,7 @@ class iso _TransactionTest is UnitTest
       end
 
       // Verify committed
-      match conn.query("SELECT COUNT(*) FROM _test_tx")
+      match \exhaustive\ conn.query("SELECT COUNT(*) FROM _test_tx")
       | let c: Cursor =>
         match c.fetch()
         | let row: Row =>
@@ -350,7 +350,7 @@ class iso _TransactionTest is UnitTest
       end
 
       // Verify rolled back — still just 1 row
-      match conn.query("SELECT COUNT(*) FROM _test_tx")
+      match \exhaustive\ conn.query("SELECT COUNT(*) FROM _test_tx")
       | let c: Cursor =>
         match c.fetch()
         | let row: Row =>
@@ -374,7 +374,7 @@ class iso _ErrorPathsTest is UnitTest
 
   fun apply(h: TestHelper) =>
     // Bad DSN
-    match Odbc.connect(Dsn("DSN=psqlred_baduser"))
+    match \exhaustive\ Odbc.connect(Dsn("DSN=psqlred_baduser"))
     | let _: Connection => h.fail("should not connect with bad user")
     | let e: ConnectError =>
       // Verify error kind
@@ -423,7 +423,7 @@ class iso _DoubleCloseTest is UnitTest
     try
       let conn = _TestSetup.connect(h)?
 
-      match conn.prepare("SELECT 1")
+      match \exhaustive\ conn.prepare("SELECT 1")
       | let stmt: Statement =>
         stmt.close()
         stmt.close() // should be no-op
@@ -465,7 +465,7 @@ class iso _CursorValuesTest is UnitTest
       _TestSetup.exec(conn, "INSERT INTO _test_iter VALUES (2, 'two')", h)
       _TestSetup.exec(conn, "INSERT INTO _test_iter VALUES (3, 'three')", h)
 
-      match conn.query("SELECT id, name FROM _test_iter ORDER BY id")
+      match \exhaustive\ conn.query("SELECT id, name FROM _test_iter ORDER BY id")
       | let cursor: Cursor =>
         var count: USize = 0
         for row in cursor.values() do
@@ -501,7 +501,7 @@ class iso _StatementValuesTest is UnitTest
       _TestSetup.exec(conn, "INSERT INTO _test_siter VALUES (10)", h)
       _TestSetup.exec(conn, "INSERT INTO _test_siter VALUES (20)", h)
 
-      match conn.prepare("SELECT id FROM _test_siter WHERE id > ? ORDER BY id")
+      match \exhaustive\ conn.prepare("SELECT id FROM _test_siter WHERE id > ? ORDER BY id")
       | let stmt: Statement =>
         match stmt.bind(ParamIndex(1), SqlInt(5))
         | let e: BindError => h.fail("bind: " + e.string())
@@ -544,12 +544,12 @@ class iso _DateTimeTypesTest is UnitTest
       _TestSetup.exec(conn,
         "INSERT INTO _test_dt VALUES ('2025-06-15', '14:30:45', '2025-06-15 14:30:45')", h)
 
-      match conn.query("SELECT d, t, ts FROM _test_dt")
+      match \exhaustive\ conn.query("SELECT d, t, ts FROM _test_dt")
       | let cursor: Cursor =>
-        match cursor.fetch()
+        match \exhaustive\ cursor.fetch()
         | let row: Row =>
           try
-            match row.date(ColIndex(1))?
+            match \exhaustive\ row.date(ColIndex(1))?
             | let d: SqlDate =>
               h.assert_eq[I16](2025, d.year)
               h.assert_eq[U16](6, d.month)
@@ -557,7 +557,7 @@ class iso _DateTimeTypesTest is UnitTest
             | SqlNull => h.fail("date was null")
             end
 
-            match row.time(ColIndex(2))?
+            match \exhaustive\ row.time(ColIndex(2))?
             | let t: SqlTime =>
               h.assert_eq[U16](14, t.hour)
               h.assert_eq[U16](30, t.minute)
@@ -565,7 +565,7 @@ class iso _DateTimeTypesTest is UnitTest
             | SqlNull => h.fail("time was null")
             end
 
-            match row.timestamp(ColIndex(3))?
+            match \exhaustive\ row.timestamp(ColIndex(3))?
             | let ts: SqlTimestamp =>
               h.assert_eq[I16](2025, ts.year)
               h.assert_eq[U16](6, ts.month)
@@ -602,19 +602,19 @@ class iso _DecimalTypesTest is UnitTest
       _TestSetup.exec(conn,
         "INSERT INTO _test_dec VALUES (123.45, 9876543.2100)", h)
 
-      match conn.query("SELECT price, amount FROM _test_dec")
+      match \exhaustive\ conn.query("SELECT price, amount FROM _test_dec")
       | let cursor: Cursor =>
-        match cursor.fetch()
+        match \exhaustive\ cursor.fetch()
         | let row: Row =>
           try
-            match row.decimal(ColIndex(1))?
+            match \exhaustive\ row.decimal(ColIndex(1))?
             | let d: SqlDecimal =>
               h.assert_true(d.value.contains("123.45"),
                 "expected 123.45 in: " + d.value)
             | SqlNull => h.fail("price was null")
             end
 
-            match row.decimal(ColIndex(2))?
+            match \exhaustive\ row.decimal(ColIndex(2))?
             | let d: SqlDecimal =>
               h.assert_true(d.value.contains("9876543.21"),
                 "expected 9876543.21 in: " + d.value)
@@ -648,13 +648,13 @@ class iso _FetchIntoTest is UnitTest
       _TestSetup.exec(conn, "INSERT INTO _test_fi VALUES (2, 'two')", h)
       _TestSetup.exec(conn, "INSERT INTO _test_fi VALUES (3, 'three')", h)
 
-      match conn.query("SELECT id, name FROM _test_fi ORDER BY id")
+      match \exhaustive\ conn.query("SELECT id, name FROM _test_fi ORDER BY id")
       | let cursor: Cursor =>
         let row = MutableRow
         var count: USize = 0
 
         while true do
-          match cursor.fetch_into(row)
+          match \exhaustive\ cursor.fetch_into(row)
           | let r: MutableRow =>
             count = count + 1
             try
@@ -801,7 +801,7 @@ class iso _DbSessionTest is UnitTest
 
                 p_query.next[None](
                   {(result: (Array[Row val] val | ExecError))(db, h) =>
-                    match result
+                    match \exhaustive\ result
                     | let rows: Array[Row val] val =>
                       h.assert_eq[USize](1, rows.size())
                       try

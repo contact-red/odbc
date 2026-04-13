@@ -333,7 +333,7 @@ class ref Statement
     """
     Partial variant of execute_update(). Raises error on failure.
     """
-    match execute_update()
+    match \exhaustive\ execute_update()
     | let rc: RowCount => rc
     | let _: ExecError => error
     end

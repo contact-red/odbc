@@ -138,7 +138,7 @@ class ref Connection
     Partial variant of exec(). Raises error on failure.
     For try/else chaining of multiple statements.
     """
-    match exec(sql)
+    match \exhaustive\ exec(sql)
     | let rc: RowCount => rc
     | let _: ExecError => error
     end
@@ -185,7 +185,7 @@ class ref Connection
     """
     Partial variant of prepare(). Raises error on failure.
     """
-    match prepare(sql)
+    match \exhaustive\ prepare(sql)
     | let s: Statement => s
     | let _: PrepareError => error
     end
@@ -228,7 +228,7 @@ class ref Connection
     """
     Partial variant of query(). Raises error on failure.
     """
-    match query(sql)
+    match \exhaustive\ query(sql)
     | let c: Cursor => c
     | let _: ExecError => error
     end

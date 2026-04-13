@@ -225,7 +225,7 @@ class ref _ColumnBindings
 
     var i: USize = 0
     while i < _num_cols do
-      match _read_column_value(i)
+      match \exhaustive\ _read_column_value(i)
       | let sv: SqlValue => columns.push(sv)
       | let e: FetchError => return e
       end
