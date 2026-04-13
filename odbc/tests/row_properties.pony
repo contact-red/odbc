@@ -14,7 +14,7 @@ class val _RowTestInput
 
 primitive _GenHelper
   fun random_sql_value(rnd: Randomness): SqlValue =>
-    let which = rnd.usize(0, 4)
+    let which = rnd.usize(0, 8)
     match which
     | 0 => SqlInt(rnd.i64())
     | 1 => SqlFloat(rnd.f64())
@@ -32,6 +32,35 @@ primitive _GenHelper
       end
       SqlText(s)
     | 3 => SqlBool(rnd.bool())
+    | 4 =>
+      SqlDate(rnd.i16(-9999, 9999), rnd.u16(1, 12), rnd.u16(1, 28))
+    | 5 =>
+      SqlTime(rnd.u16(0, 23), rnd.u16(0, 59), rnd.u16(0, 59))
+    | 6 =>
+      SqlTimestamp(
+        rnd.i16(-9999, 9999),
+        rnd.u16(1, 12),
+        rnd.u16(1, 28),
+        rnd.u16(0, 23),
+        rnd.u16(0, 59),
+        rnd.u16(0, 59),
+        rnd.u32(0, 999_999_999))
+    | 7 =>
+      let len = rnd.usize(1, 15)
+      let s =
+        recover val
+        let buf = String(len + 3)
+        var i: USize = 0
+        while i < len do
+          buf.push(rnd.u8(0x30, 0x39))
+          i = i + 1
+        end
+        buf.push('.')
+        buf.push(rnd.u8(0x30, 0x39))
+        buf.push(rnd.u8(0x30, 0x39))
+        buf
+      end
+      SqlDecimal(s)
     else SqlNull
     end
 

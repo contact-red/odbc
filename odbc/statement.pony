@@ -62,9 +62,11 @@ class ref Statement
     """
     Write value into parameter scratch slot. Atomic per param.
     """
-    match _check_alive()
-    | let _: ExecError =>
-      return BindError(ParamIndexOutOfRange, i)
+    if _closed then
+      return BindError(BindStatementClosed, i)
+    end
+    if not _conn_alive.is_alive() then
+      return BindError(BindConnectionClosed, i)
     end
 
     let idx = i.apply()

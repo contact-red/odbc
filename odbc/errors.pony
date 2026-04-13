@@ -241,7 +241,13 @@ class val BindError
 
   fun unsafe_diag(): DiagChain => _diag
 
-type BindErrorKind is (ParamIndexOutOfRange | ParamTooLarge | DriverRejected)
+type BindErrorKind is
+  ( ParamIndexOutOfRange
+  | ParamTooLarge
+  | DriverRejected
+  | BindStatementClosed
+  | BindConnectionClosed
+  )
 
 primitive ParamIndexOutOfRange
   """
@@ -260,6 +266,18 @@ primitive DriverRejected
   ODBC driver rejected the bind call.
   """
   fun string(): String val => "driver rejected"
+
+primitive BindStatementClosed
+  """
+  Bind attempted on a closed statement.
+  """
+  fun string(): String val => "statement closed"
+
+primitive BindConnectionClosed
+  """
+  Bind attempted after connection closed.
+  """
+  fun string(): String val => "connection closed"
 
 class val FetchError
   """

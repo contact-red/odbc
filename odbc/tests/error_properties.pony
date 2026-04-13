@@ -173,7 +173,7 @@ class iso _SqlValueRoundtripProperty is Property1[_SqlValueInput]
     let row = Row.create(consume cols)
     let ci = ColIndex(1)
 
-    match input.value
+    match \exhaustive\ input.value
     | SqlNull =>
       try ph.assert_true(row.is_null(ci)?)
       else ph.fail("is_null raised error") end
@@ -201,4 +201,42 @@ class iso _SqlValueRoundtripProperty is Property1[_SqlValueInput]
         | let r: String val => ph.assert_eq[String val](v.value, r)
         else ph.fail("text returned SqlNull") end
       else ph.fail("text raised error") end
+    | let v: SqlDate =>
+      try
+        match row.date(ci)?
+        | let r: SqlDate =>
+          ph.assert_eq[I16](v.year, r.year)
+          ph.assert_eq[U16](v.month, r.month)
+          ph.assert_eq[U16](v.day, r.day)
+        else ph.fail("date returned SqlNull") end
+      else ph.fail("date raised error") end
+    | let v: SqlTime =>
+      try
+        match row.time(ci)?
+        | let r: SqlTime =>
+          ph.assert_eq[U16](v.hour, r.hour)
+          ph.assert_eq[U16](v.minute, r.minute)
+          ph.assert_eq[U16](v.second, r.second)
+        else ph.fail("time returned SqlNull") end
+      else ph.fail("time raised error") end
+    | let v: SqlTimestamp =>
+      try
+        match row.timestamp(ci)?
+        | let r: SqlTimestamp =>
+          ph.assert_eq[I16](v.year, r.year)
+          ph.assert_eq[U16](v.month, r.month)
+          ph.assert_eq[U16](v.day, r.day)
+          ph.assert_eq[U16](v.hour, r.hour)
+          ph.assert_eq[U16](v.minute, r.minute)
+          ph.assert_eq[U16](v.second, r.second)
+          ph.assert_eq[U32](v.fraction, r.fraction)
+        else ph.fail("timestamp returned SqlNull") end
+      else ph.fail("timestamp raised error") end
+    | let v: SqlDecimal =>
+      try
+        match row.decimal(ci)?
+        | let r: SqlDecimal =>
+          ph.assert_eq[String val](v.value, r.value)
+        else ph.fail("decimal returned SqlNull") end
+      else ph.fail("decimal raised error") end
     end
