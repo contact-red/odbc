@@ -19,9 +19,11 @@ class ref _ColumnBindings
   // Whether column type is unsupported
   let _is_unsupported: Array[Bool] ref
   let _validate_utf8: Bool
+  let _hstmt: Pointer[None] tag
 
   new ref create(hstmt: Pointer[None] tag,
     validate_utf8: Bool = true) ? =>
+    _hstmt = hstmt
     _validate_utf8 = validate_utf8
     var nc: I16 = 0
     @SQLNumResultCols(hstmt, addressof nc)
@@ -95,8 +97,10 @@ class ref _ColumnBindings
       _is_unsupported.push(false)
 
       if c_type == _ODBC.c_char() then
-        // Text column: allocate buffer based on declared col_size, capped
-        let buf_size = (col_size + 1).usize().min(16_777_216) // 16 MB
+        // Text column: allocate buffer based on declared col_size, capped.
+        // Floor at 4096 — some drivers report col_size=0 for TEXT/LONGVARCHAR.
+        let buf_size =
+          (col_size + 1).usize().max(4096).min(16_777_216) // 4 KB .. 16 MB
         let tbuf: String ref = String(buf_size)
         j = 0
         while j < buf_size do tbuf.push(0); j = j + 1 end
@@ -167,7 +171,18 @@ class ref _ColumnBindings
         elseif _is_text(i)? then
           let tbuf = _text_bufs(i)?
           let len = ind.usize()
-          let text: String val = tbuf.substring(0, len.isize())
+
+          // If data fits in bound buffer, read directly.
+          // Otherwise fall back to SQLGetData for the full value.
+          var text: String val = ""
+          if len < tbuf.size() then
+            text = tbuf.substring(0, len.isize())
+          else
+            match \exhaustive\ _get_long_text(i)
+            | let s: String val => text = s
+            | let e: FetchError => return e
+            end
+          end
 
           // Numeric/decimal → SqlDecimal; otherwise → SqlText
           let sql_type = _sql_types(i)?
@@ -270,7 +285,18 @@ class ref _ColumnBindings
       elseif _is_text(i)? then
         let tbuf = _text_bufs(i)?
         let len = ind.usize()
-        let text: String val = tbuf.substring(0, len.isize())
+
+        // If data fits in bound buffer, read directly.
+        // Otherwise fall back to SQLGetData for the full value.
+        var text: String val = ""
+        if len < tbuf.size() then
+          text = tbuf.substring(0, len.isize())
+        else
+          match \exhaustive\ _get_long_text(i)
+          | let s: String val => text = s
+          | let e: FetchError => return e
+          end
+        end
 
         let sql_type = _sql_types(i)?
         if (sql_type == _ODBC.sql_numeric())
@@ -354,6 +380,63 @@ class ref _ColumnBindings
       true
     else
       false
+    end
+
+  fun ref _get_long_text(i: USize): (String val | FetchError) =>
+    """
+    Retrieve full text for column i when the bound buffer was too small.
+    Concatenates the head (from the bound buffer) with the remainder
+    retrieved via SQLGetData.
+    """
+    try
+      let tbuf = _text_bufs(i)?
+      let total_len = _indicators(i)?.usize()
+      let buf_cap = tbuf.size()
+      // Bound buffer holds buf_cap-1 data bytes (last is null terminator)
+      let head_len = buf_cap - 1
+
+      // Cap total retrieval at 16 MB
+      if total_len > 16_777_216 then
+        return FetchError(ColumnTooLarge)
+      end
+
+      // Head: data already written into the bound buffer by SQLFetch
+      let head: String val = tbuf.substring(0, head_len.isize())
+
+      // Tail: retrieve remaining bytes via SQLGetData.
+      // Per ODBC spec, after SQLFetch with a bound column, SQLGetData
+      // returns data starting after the last byte returned by the bind.
+      let remaining = total_len - head_len
+      let tail_buf: String ref = String(remaining + 1)
+      var j: USize = 0
+      while j < (remaining + 1) do tail_buf.push(0); j = j + 1 end
+
+      var tail_ind: I64 = 0
+      let col_num = (i + 1).u16()
+      let tail_buf_len = (remaining + 1).i64()
+      let rc =
+        @SQLGetData(
+        _hstmt,
+        col_num,
+        _ODBC.c_char(),
+        tail_buf.cpointer(),
+        tail_buf_len,
+        addressof tail_ind)
+
+      if not _ODBC.ok(rc) then
+        return FetchError(ColumnTooLarge)
+      end
+
+      let tail_len: USize =
+        if tail_ind == _ODBC.sql_null_data() then 0
+        elseif tail_ind < 0 then 0
+        else tail_ind.usize().min(remaining)
+        end
+      let tail: String val = tail_buf.substring(0, tail_len.isize())
+
+      head + tail
+    else
+      FetchError(DriverFetchError)
     end
 
   fun num_cols(): USize => _num_cols

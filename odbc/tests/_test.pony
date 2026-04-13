@@ -42,4 +42,6 @@ actor Main is TestList
     test(_FetchIntoTest)
     test(_PartialFunctionTest)
     test(_BindDateTimeDecimalTest)
+    test(_LargeTextRoundtripTest)
+    test(_TextTruncationDetectionTest)
     test(_DbSessionTest)

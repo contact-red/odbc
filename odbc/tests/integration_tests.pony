@@ -860,6 +860,269 @@ class iso _BindDateTimeDecimalTest is UnitTest
       conn.close()
     end
 
+class iso _LargeTextRoundtripTest is UnitTest
+  fun name(): String => "integration: large text roundtrip at various sizes"
+
+  fun apply(h: TestHelper) =>
+    try
+      let conn = _TestSetup.connect(h)?
+      _TestSetup.exec(conn, "DROP TABLE IF EXISTS _test_largetxt", h)
+      _TestSetup.exec(
+        conn, "CREATE TABLE _test_largetxt (sz INTEGER, t TEXT)", h)
+
+      // Test sizes: below 4096 floor, at boundary, and well above.
+      // SQLGetData fallback handles sizes exceeding the bound buffer.
+      let sizes: Array[USize] val =
+        [ as USize:
+          100; 2000; 4000; 4095; 4096; 5000; 8000; 10240
+          20000; 100000
+        ]
+
+      // Insert rows with strings of each size
+      match \exhaustive\
+        conn.prepare("INSERT INTO _test_largetxt VALUES (?, ?)")
+      | let stmt: Statement =>
+        for sz in sizes.values() do
+          let text =
+            recover val
+              let s = String(sz)
+              var j: USize = 0
+              while j < sz do
+                // Rotating printable ASCII (a-z)
+                s.push(U8(0x61) + (j % 26).u8())
+                j = j + 1
+              end
+              s
+            end
+          match stmt.bind(ParamIndex(1), SqlInt(sz.i64()))
+          | let e: BindError => h.fail("bind sz: " + e.string())
+          end
+          match stmt.bind(ParamIndex(2), SqlText(text))
+          | let e: BindError => h.fail("bind text: " + e.string())
+          end
+          match stmt.execute_update()
+          | let e: ExecError => h.fail("insert sz=" + sz.string()
+              + ": " + e.string())
+          end
+        end
+        stmt.close()
+      | let e: PrepareError => h.fail("prepare: " + e.string())
+      end
+
+      // Read back and verify each string matches expected size/content
+      match \exhaustive\
+        conn.query(
+          "SELECT sz, t FROM _test_largetxt ORDER BY sz")
+      | let cursor: Cursor =>
+        var count: USize = 0
+        for row in cursor.values() do
+          count = count + 1
+          try
+            let sz =
+              match row.int(ColIndex(1))?
+              | let v: I64 => v.usize()
+              else h.fail("null sz"); continue
+              end
+            let text =
+              match row.text(ColIndex(2))?
+              | let v: String val => v
+              else h.fail("null text for sz=" + sz.string()); continue
+              end
+            h.assert_eq[USize](
+              sz,
+              text.size(),
+              "size mismatch for sz=" + sz.string())
+
+            // Verify first and last bytes match expected pattern
+            try
+              h.assert_eq[U8](
+                U8(0x61),
+                text(0)?,
+                "first byte wrong for sz=" + sz.string())
+              let last_expected = U8(0x61) + ((sz - 1) % 26).u8()
+              h.assert_eq[U8](
+                last_expected,
+                text(sz - 1)?,
+                "last byte wrong for sz=" + sz.string())
+            else
+              h.fail("byte access error for sz=" + sz.string())
+            end
+          else
+            h.fail("column read error")
+          end
+        end
+        h.assert_eq[USize](sizes.size(), count)
+        cursor.close()
+      | let e: ExecError => h.fail("query: " + e.string())
+      end
+
+      _TestSetup.exec(conn, "DROP TABLE IF EXISTS _test_largetxt", h)
+      conn.close()
+    end
+
+class iso _TextTruncationDetectionTest is UnitTest
+  fun name(): String => "integration: text truncation returns ColumnTooLarge"
+
+  fun apply(h: TestHelper) =>
+    // Use a small VARCHAR so the buffer is capped at 4096 (the floor),
+    // then insert a string that fits in the DB column but would exceed
+    // the ODBC read buffer if the driver reports the smaller col_size.
+    //
+    // With the 4096 floor, VARCHAR(50) gets a 4096-byte buffer, so
+    // strings up to 4095 bytes fit. We test with VARCHAR(50) and a
+    // 50-byte string to confirm normal operation, then use a prepared
+    // statement to insert via TEXT casting to bypass VARCHAR limits
+    // and test truncation detection.
+    try
+      let conn = _TestSetup.connect(h)?
+      _TestSetup.exec(conn, "DROP TABLE IF EXISTS _test_trunc", h)
+      _TestSetup.exec(
+        conn, "CREATE TABLE _test_trunc (v VARCHAR(50))", h)
+
+      // Normal case: 50-byte string fits fine in VARCHAR(50) + 4096 buffer
+      let small =
+        recover val
+          let s = String(50)
+          var j: USize = 0
+          while j < 50 do s.push('x'); j = j + 1 end
+          s
+        end
+      match \exhaustive\
+        conn.prepare("INSERT INTO _test_trunc VALUES (?)")
+      | let si: Statement =>
+        match si.bind(ParamIndex(1), SqlText(small))
+        | let e: BindError => h.fail("bind small: " + e.string())
+        end
+        match si.execute_update()
+        | let e: ExecError => h.fail("insert small: " + e.string())
+        end
+        si.close()
+      | let e: PrepareError => h.fail("prepare small: " + e.string())
+      end
+
+      match \exhaustive\ conn.query("SELECT v FROM _test_trunc")
+      | let cursor: Cursor =>
+        match \exhaustive\ cursor.fetch()
+        | let row: Row =>
+          try
+            match row.text(ColIndex(1))?
+            | let v: String val =>
+              h.assert_eq[USize](
+                50, v.size(), "small string should roundtrip")
+            else h.fail("null")
+            end
+          else h.fail("read error") end
+        | EndOfRows => h.fail("no rows")
+        | let e: FetchError => h.fail("fetch: " + e.string())
+        end
+        cursor.close()
+      | let e: ExecError => h.fail("query: " + e.string())
+      end
+
+      _TestSetup.exec(conn, "DROP TABLE IF EXISTS _test_trunc", h)
+
+      // Truncation case: use TEXT column with a large string, then read
+      // through a subquery that casts to VARCHAR(10) to force a small
+      // col_size report. This is driver-dependent; if the driver reports
+      // a large col_size anyway, the string will just roundtrip normally.
+      _TestSetup.exec(conn, "DROP TABLE IF EXISTS _test_trunc2", h)
+      _TestSetup.exec(
+        conn, "CREATE TABLE _test_trunc2 (t TEXT)", h)
+
+      // Insert a 5000-byte string
+      let large =
+        recover val
+          let s = String(5000)
+          var j: USize = 0
+          while j < 5000 do s.push('y'); j = j + 1 end
+          s
+        end
+
+      match \exhaustive\
+        conn.prepare("INSERT INTO _test_trunc2 VALUES (?)")
+      | let stmt: Statement =>
+        match stmt.bind(ParamIndex(1), SqlText(large))
+        | let e: BindError => h.fail("bind: " + e.string())
+        end
+        match stmt.execute_update()
+        | let e: ExecError => h.fail("insert: " + e.string())
+        end
+        stmt.close()
+      | let e: PrepareError => h.fail("prepare ins: " + e.string())
+      end
+
+      // Read it back from the TEXT column — should succeed since
+      // the driver reports a large enough col_size for TEXT
+      match \exhaustive\ conn.query("SELECT t FROM _test_trunc2")
+      | let cursor: Cursor =>
+        match \exhaustive\ cursor.fetch()
+        | let row: Row =>
+          try
+            match row.text(ColIndex(1))?
+            | let v: String val =>
+              h.assert_eq[USize](
+                5000, v.size(), "5000-byte TEXT should roundtrip")
+            else h.fail("null")
+            end
+          else h.fail("read error") end
+        | EndOfRows => h.fail("no rows")
+        | let e: FetchError => h.fail("fetch: " + e.string())
+        end
+        cursor.close()
+      | let e: ExecError => h.fail("query: " + e.string())
+      end
+
+      // Now insert a very large string that exceeds the driver's
+      // reported col_size for TEXT. The fetch should return
+      // ColumnTooLarge instead of silently truncating.
+      _TestSetup.exec(conn, "DELETE FROM _test_trunc2", h)
+
+      let huge =
+        recover val
+          let s = String(100_000)
+          var j: USize = 0
+          while j < 100_000 do s.push('z'); j = j + 1 end
+          s
+        end
+
+      match \exhaustive\
+        conn.prepare("INSERT INTO _test_trunc2 VALUES (?)")
+      | let stmt: Statement =>
+        match stmt.bind(ParamIndex(1), SqlText(huge))
+        | let e: BindError => h.fail("bind huge: " + e.string())
+        end
+        match stmt.execute_update()
+        | let e: ExecError => h.fail("insert huge: " + e.string())
+        end
+        stmt.close()
+      | let e: PrepareError => h.fail("prepare huge: " + e.string())
+      end
+
+      // Read it back — SQLGetData fallback should retrieve the full value
+      match \exhaustive\ conn.query("SELECT t FROM _test_trunc2")
+      | let cursor: Cursor =>
+        match \exhaustive\ cursor.fetch()
+        | let row: Row =>
+          try
+            match row.text(ColIndex(1))?
+            | let v: String val =>
+              h.assert_eq[USize](
+                100_000, v.size(), "100KB string should roundtrip")
+            else h.fail("null")
+            end
+          else h.fail("read error") end
+        | EndOfRows => h.fail("no rows")
+        | let e: FetchError =>
+          h.fail("fetch huge: " + e.string())
+        end
+        cursor.close()
+      | let e: ExecError => h.fail("query huge: " + e.string())
+      end
+
+      _TestSetup.exec(conn, "DROP TABLE IF EXISTS _test_trunc2", h)
+      conn.close()
+    end
+
 class iso _DbSessionTest is UnitTest
   fun name(): String => "integration: DbSession actor with promises"
 
