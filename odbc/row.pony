@@ -51,10 +51,22 @@ class val Row
   fun bool(i: ColIndex): (Bool | SqlNull) ? =>
     """
     Read column as Bool. Raises error on type mismatch or out of range.
+
+    Accepts SqlBool, SqlInt (0=false, nonzero=true), and SqlText
+    ("1"/"0"/"t"/"f"/"true"/"false") to handle drivers that report
+    boolean columns as SMALLINT or CHAR (e.g., psqlODBC with
+    BoolsAsChar=Yes).
     """
     match column(i)?
     | SqlNull => SqlNull
     | let v: SqlBool => v.value
+    | let v: SqlInt => v.value != 0
+    | let v: SqlText =>
+      match v.value.lower()
+      | "1" | "t" | "true" => true
+      | "0" | "f" | "false" => false
+      else error
+      end
     else error
     end
 

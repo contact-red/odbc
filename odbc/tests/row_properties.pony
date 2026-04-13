@@ -200,6 +200,28 @@ class iso _RowBoolAccessorProperty is Property1[_RowTestInput]
         | let r: Bool => ph.assert_eq[Bool](v.value, r)
         else ph.fail("expected Bool, got SqlNull")
         end
+      | let v: SqlInt =>
+        // bool() now accepts SqlInt (0=false, nonzero=true)
+        match result
+        | let r: Bool => ph.assert_eq[Bool](v.value != 0, r)
+        else ph.fail("expected Bool from SqlInt, got SqlNull")
+        end
+      | let v: SqlText =>
+        // bool() now accepts SqlText for boolean-like strings
+        match v.value.lower()
+        | "1" | "t" | "true" =>
+          match result
+          | let r: Bool => ph.assert_eq[Bool](true, r)
+          else ph.fail("expected true from SqlText, got SqlNull")
+          end
+        | "0" | "f" | "false" =>
+          match result
+          | let r: Bool => ph.assert_eq[Bool](false, r)
+          else ph.fail("expected false from SqlText, got SqlNull")
+          end
+        else
+          ph.fail("bool() should have raised error for non-boolean SqlText")
+        end
       | SqlNull =>
         match result
         | SqlNull => None
@@ -210,6 +232,14 @@ class iso _RowBoolAccessorProperty is Property1[_RowTestInput]
     else
       match input.expected
       | let _: SqlBool => ph.fail("bool() raised error on SqlBool")
+      | let _: SqlInt => ph.fail("bool() raised error on SqlInt")
+      | let v: SqlText =>
+        // Error is expected for non-boolean text values
+        match v.value.lower()
+        | "1" | "t" | "true" | "0" | "f" | "false" =>
+          ph.fail("bool() raised error on boolean SqlText")
+        else None // error is correct for non-boolean text
+        end
       | SqlNull => ph.fail("bool() raised error on SqlNull")
       else None
       end
