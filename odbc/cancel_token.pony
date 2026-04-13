@@ -30,7 +30,12 @@ class val CancelToken
   fun cancel() =>
     """
     Request cancellation of the in-progress operation on this statement.
-    Safe to call from any actor. No-op if the statement has already
-    completed or been closed.
+    Safe to call from any actor while the operation is in progress.
+
+    WARNING: The token holds a raw copy of the SQLHSTMT pointer. If the
+    owning Statement or Cursor has been closed (freeing the handle), this
+    calls SQLCancel on a freed handle — undefined behavior. Callers must
+    ensure the token is not used after close(). See Statement.cancel_token()
+    and Cursor.cancel_token() for the lifetime contract.
     """
     @SQLCancel(_hstmt)

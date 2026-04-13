@@ -444,6 +444,12 @@ class ref Statement
     """
     Return a sendable token that can cancel this statement's
     in-progress operation from another actor.
+
+    The token captures a raw copy of the SQLHSTMT pointer. It does not
+    track whether the statement has been closed. Calling cancel() on a
+    token after close() invokes SQLCancel on a freed handle — undefined
+    behavior. The caller must ensure all outstanding tokens are discarded
+    before calling close().
     """
     CancelToken(_hstmt)
 
@@ -465,6 +471,10 @@ class ref Statement
   fun ref close() =>
     """
     Free the SQLHSTMT. Idempotent.
+
+    Any CancelTokens obtained from cancel_token() become invalid after
+    this call. Using a token after close() is undefined behavior — see
+    cancel_token() for the lifetime contract.
     """
     if _closed then return end
     if _cursor_open then
