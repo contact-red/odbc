@@ -767,6 +767,99 @@ class iso _PartialFunctionTest is UnitTest
       conn.close()
     end
 
+class iso _BindDateTimeDecimalTest is UnitTest
+  fun name(): String => "integration: bind date/time/timestamp/decimal params"
+
+  fun apply(h: TestHelper) =>
+    try
+      let conn = _TestSetup.connect(h)?
+      _TestSetup.exec(conn, "DROP TABLE IF EXISTS _test_bind_dt", h)
+      let bind_ct =
+        "CREATE TABLE _test_bind_dt"
+          + " (d DATE, t TIME, ts TIMESTAMP, dec NUMERIC(10,2))"
+      _TestSetup.exec(conn, bind_ct, h)
+
+      match \exhaustive\
+        conn.prepare(
+          "INSERT INTO _test_bind_dt VALUES (?, ?, ?, ?)")
+      | let stmt: Statement =>
+        match stmt.bind(ParamIndex(1), SqlDate(2025, 6, 15))
+        | let e: BindError => h.fail("bind date: " + e.string())
+        end
+        match stmt.bind(ParamIndex(2), SqlTime(14, 30, 45))
+        | let e: BindError => h.fail("bind time: " + e.string())
+        end
+        let ts = SqlTimestamp(2025, 6, 15, 14, 30, 45, 0)
+        match stmt.bind(ParamIndex(3), ts)
+        | let e: BindError => h.fail("bind timestamp: " + e.string())
+        end
+        match stmt.bind(ParamIndex(4), SqlDecimal("123.45"))
+        | let e: BindError => h.fail("bind decimal: " + e.string())
+        end
+        match \exhaustive\ stmt.execute_update()
+        | let n: USize => h.assert_eq[USize](1, n)
+        | None => None
+        | let e: ExecError => h.fail("exec: " + e.string())
+        end
+        stmt.close()
+      | let e: PrepareError => h.fail("prepare: " + e.string())
+      end
+
+      // Read back and verify
+      match \exhaustive\
+        conn.query("SELECT d, t, ts, dec FROM _test_bind_dt")
+      | let cursor: Cursor =>
+        match \exhaustive\ cursor.fetch()
+        | let row: Row =>
+          try
+            match \exhaustive\ row.date(ColIndex(1))?
+            | let d: SqlDate =>
+              h.assert_eq[I16](2025, d.year)
+              h.assert_eq[U16](6, d.month)
+              h.assert_eq[U16](15, d.day)
+            | SqlNull => h.fail("date was null")
+            end
+
+            match \exhaustive\ row.time(ColIndex(2))?
+            | let t: SqlTime =>
+              h.assert_eq[U16](14, t.hour)
+              h.assert_eq[U16](30, t.minute)
+              h.assert_eq[U16](45, t.second)
+            | SqlNull => h.fail("time was null")
+            end
+
+            match \exhaustive\ row.timestamp(ColIndex(3))?
+            | let ts: SqlTimestamp =>
+              h.assert_eq[I16](2025, ts.year)
+              h.assert_eq[U16](6, ts.month)
+              h.assert_eq[U16](15, ts.day)
+              h.assert_eq[U16](14, ts.hour)
+              h.assert_eq[U16](30, ts.minute)
+              h.assert_eq[U16](45, ts.second)
+            | SqlNull => h.fail("timestamp was null")
+            end
+
+            match \exhaustive\ row.decimal(ColIndex(4))?
+            | let d: SqlDecimal =>
+              h.assert_true(
+                d.value.contains("123.45"),
+                "expected 123.45 in: " + d.value)
+            | SqlNull => h.fail("decimal was null")
+            end
+          else
+            h.fail("column read error")
+          end
+        | EndOfRows => h.fail("no rows")
+        | let e: FetchError => h.fail("fetch: " + e.string())
+        end
+        cursor.close()
+      | let e: ExecError => h.fail("query: " + e.string())
+      end
+
+      _TestSetup.exec(conn, "DROP TABLE IF EXISTS _test_bind_dt", h)
+      conn.close()
+    end
+
 class iso _DbSessionTest is UnitTest
   fun name(): String => "integration: DbSession actor with promises"
 

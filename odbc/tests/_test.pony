@@ -41,4 +41,5 @@ actor Main is TestList
     test(_DecimalTypesTest)
     test(_FetchIntoTest)
     test(_PartialFunctionTest)
+    test(_BindDateTimeDecimalTest)
     test(_DbSessionTest)

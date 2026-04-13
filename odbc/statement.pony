@@ -77,7 +77,7 @@ class ref Statement
     try
       let buf = _param_bufs(pos)?
 
-      match v
+      match \exhaustive\ v
       | SqlNull =>
         _param_inds(pos)? = _ODBC.sql_null_data()
         _param_c_types(pos)? = _ODBC.c_char()
@@ -103,6 +103,56 @@ class ref Statement
           _param_bufs(pos)? = new_buf
           @memcpy(new_buf.cpointer(), bytes.cpointer(), needed)
           _needs_rebind = true  // buffer address changed
+        else
+          @memcpy(buf.cpointer(), bytes.cpointer(), needed)
+        end
+        _param_inds(pos)? = needed.i64()
+        _param_c_types(pos)? = _ODBC.c_char()
+      | let sv: SqlDate =>
+        var yr = sv.year; var mo = sv.month; var dy = sv.day
+        @memcpy(buf.cpointer(), addressof yr, 2)
+        @memcpy(buf.cpointer(2), addressof mo, 2)
+        @memcpy(buf.cpointer(4), addressof dy, 2)
+        _param_inds(pos)? = 0
+        _param_c_types(pos)? = _ODBC.c_type_date()
+      | let sv: SqlTime =>
+        var hr = sv.hour; var mi = sv.minute; var se = sv.second
+        @memcpy(buf.cpointer(), addressof hr, 2)
+        @memcpy(buf.cpointer(2), addressof mi, 2)
+        @memcpy(buf.cpointer(4), addressof se, 2)
+        _param_inds(pos)? = 0
+        _param_c_types(pos)? = _ODBC.c_type_time()
+      | let sv: SqlTimestamp =>
+        let needed: USize = _ODBC.timestamp_struct_size()
+        let tbuf =
+          if needed > buf.size() then
+            let new_buf = Array[U8].init(0, needed)
+            _param_bufs(pos)? = new_buf
+            _needs_rebind = true
+            new_buf
+          else
+            buf
+          end
+        var yr = sv.year; var mo = sv.month; var dy = sv.day
+        var hr = sv.hour; var mi = sv.minute; var se = sv.second
+        var fr = sv.fraction
+        @memcpy(tbuf.cpointer(), addressof yr, 2)
+        @memcpy(tbuf.cpointer(2), addressof mo, 2)
+        @memcpy(tbuf.cpointer(4), addressof dy, 2)
+        @memcpy(tbuf.cpointer(6), addressof hr, 2)
+        @memcpy(tbuf.cpointer(8), addressof mi, 2)
+        @memcpy(tbuf.cpointer(10), addressof se, 2)
+        @memcpy(tbuf.cpointer(12), addressof fr, 4)
+        _param_inds(pos)? = 0
+        _param_c_types(pos)? = _ODBC.c_type_timestamp()
+      | let sv: SqlDecimal =>
+        let bytes = sv.value
+        let needed = bytes.size()
+        if needed > buf.size() then
+          let new_buf = Array[U8].init(0, needed)
+          _param_bufs(pos)? = new_buf
+          @memcpy(new_buf.cpointer(), bytes.cpointer(), needed)
+          _needs_rebind = true
         else
           @memcpy(buf.cpointer(), bytes.cpointer(), needed)
         end
@@ -260,6 +310,9 @@ class ref Statement
           | _ODBC.c_bit() => _ODBC.sql_bit()
           | _ODBC.c_sbigint() => _ODBC.sql_bigint()
           | _ODBC.c_double() => _ODBC.sql_double()
+          | _ODBC.c_type_date() => _ODBC.sql_type_date()
+          | _ODBC.c_type_time() => _ODBC.sql_type_time()
+          | _ODBC.c_type_timestamp() => _ODBC.sql_type_timestamp()
           else _ODBC.sql_varchar()
           end
 
