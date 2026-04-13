@@ -438,7 +438,7 @@ class ref Statement
   fun ref values(): StatementIterator =>
     """
     Return an iterator for use with Pony's `for` loop.
-    FetchError during iteration raises error from next().
+    Yields (Row val | FetchError) — match on each result.
     """
     StatementIterator(this)
 

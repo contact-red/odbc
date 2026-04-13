@@ -10,7 +10,7 @@ class val CancelToken
   let token = stmt.cancel_token()
   supervisor.register_cancel(token)
   stmt.execute_p()?
-  for row in stmt.values() do ... end
+  for result in stmt.values() do ... end
 
   // In the supervising actor:
   be timeout(token: CancelToken) =>

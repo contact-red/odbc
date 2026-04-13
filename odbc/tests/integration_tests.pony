@@ -469,15 +469,20 @@ class iso _CursorValuesTest is UnitTest
         conn.query("SELECT id, name FROM _test_iter ORDER BY id")
       | let cursor: Cursor =>
         var count: USize = 0
-        for row in cursor.values() do
-          count = count + 1
-          try
-            match row.int(ColIndex(1))?
-            | let v: I64 => h.assert_eq[I64](count.i64(), v)
-            else h.fail("null id")
+        for result in cursor.values() do
+          match \exhaustive\ result
+          | let row: Row =>
+            count = count + 1
+            try
+              match row.int(ColIndex(1))?
+              | let v: I64 => h.assert_eq[I64](count.i64(), v)
+              else h.fail("null id")
+              end
+            else
+              h.fail("column read error")
             end
-          else
-            h.fail("column read error")
+          | let e: FetchError =>
+            h.fail("fetch error: " + e.string())
           end
         end
         h.assert_eq[USize](3, count, "expected 3 rows from iterator")
@@ -512,14 +517,19 @@ class iso _StatementValuesTest is UnitTest
         end
 
         var total: I64 = 0
-        for row in stmt.values() do
-          try
-            match row.int(ColIndex(1))?
-            | let v: I64 => total = total + v
-            else h.fail("null")
+        for result in stmt.values() do
+          match \exhaustive\ result
+          | let row: Row =>
+            try
+              match row.int(ColIndex(1))?
+              | let v: I64 => total = total + v
+              else h.fail("null")
+              end
+            else
+              h.fail("read error")
             end
-          else
-            h.fail("read error")
+          | let e: FetchError =>
+            h.fail("fetch error: " + e.string())
           end
         end
         h.assert_eq[I64](30, total, "expected 10+20=30")
@@ -742,14 +752,19 @@ class iso _PartialFunctionTest is UnitTest
       // Verify all 5 rows
       try
         let cursor = conn.query_p("SELECT COUNT(*) FROM _test_pf")?
-        for row in cursor.values() do
-          try
-            match row.int(ColIndex(1))?
-            | let v: I64 => h.assert_eq[I64](5, v)
-            else h.fail("null count")
+        for result in cursor.values() do
+          match \exhaustive\ result
+          | let row: Row =>
+            try
+              match row.int(ColIndex(1))?
+              | let v: I64 => h.assert_eq[I64](5, v)
+              else h.fail("null count")
+              end
+            else
+              h.fail("count read error")
             end
-          else
-            h.fail("count read error")
+          | let e: FetchError =>
+            h.fail("fetch error: " + e.string())
           end
         end
         cursor.close()
@@ -915,40 +930,45 @@ class iso _LargeTextRoundtripTest is UnitTest
           "SELECT sz, t FROM _test_largetxt ORDER BY sz")
       | let cursor: Cursor =>
         var count: USize = 0
-        for row in cursor.values() do
-          count = count + 1
-          try
-            let sz =
-              match row.int(ColIndex(1))?
-              | let v: I64 => v.usize()
-              else h.fail("null sz"); continue
-              end
-            let text =
-              match row.text(ColIndex(2))?
-              | let v: String val => v
-              else h.fail("null text for sz=" + sz.string()); continue
-              end
-            h.assert_eq[USize](
-              sz,
-              text.size(),
-              "size mismatch for sz=" + sz.string())
-
-            // Verify first and last bytes match expected pattern
+        for result in cursor.values() do
+          match \exhaustive\ result
+          | let row: Row =>
+            count = count + 1
             try
-              h.assert_eq[U8](
-                U8(0x61),
-                text(0)?,
-                "first byte wrong for sz=" + sz.string())
-              let last_expected = U8(0x61) + ((sz - 1) % 26).u8()
-              h.assert_eq[U8](
-                last_expected,
-                text(sz - 1)?,
-                "last byte wrong for sz=" + sz.string())
+              let sz =
+                match row.int(ColIndex(1))?
+                | let v: I64 => v.usize()
+                else h.fail("null sz"); continue
+                end
+              let text =
+                match row.text(ColIndex(2))?
+                | let v: String val => v
+                else h.fail("null text for sz=" + sz.string()); continue
+                end
+              h.assert_eq[USize](
+                sz,
+                text.size(),
+                "size mismatch for sz=" + sz.string())
+
+              // Verify first and last bytes match expected pattern
+              try
+                h.assert_eq[U8](
+                  U8(0x61),
+                  text(0)?,
+                  "first byte wrong for sz=" + sz.string())
+                let last_expected = U8(0x61) + ((sz - 1) % 26).u8()
+                h.assert_eq[U8](
+                  last_expected,
+                  text(sz - 1)?,
+                  "last byte wrong for sz=" + sz.string())
+              else
+                h.fail("byte access error for sz=" + sz.string())
+              end
             else
-              h.fail("byte access error for sz=" + sz.string())
+              h.fail("column read error")
             end
-          else
-            h.fail("column read error")
+          | let e: FetchError =>
+            h.fail("fetch error: " + e.string())
           end
         end
         h.assert_eq[USize](sizes.size(), count)

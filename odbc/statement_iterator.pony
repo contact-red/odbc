@@ -1,37 +1,39 @@
-class ref StatementIterator is Iterator[Row val]
+class ref StatementIterator is Iterator[(Row val | FetchError)]
   """
-  Iterator adapter for Statement. Enables `for row in stmt.values() do`.
-  FetchError raises error from next(). EndOfRows ends iteration.
+  Iterator adapter for Statement. Enables `for result in stmt.values() do`.
+  Yields Row values on success, FetchError on failure. EndOfRows ends
+  iteration.
   """
   let _stmt: Statement ref
-  var _next_row: (Row val | None)
+  var _next: (Row val | FetchError | None)
   var _done: Bool
-  var _error: Bool
 
   new ref create(stmt: Statement ref) =>
     _stmt = stmt
-    _next_row = None
+    _next = None
     _done = false
-    _error = false
     _prefetch()
 
   fun ref _prefetch() =>
-    if _done or _error then return end
+    if _done then return end
     match \exhaustive\ _stmt.fetch()
-    | let row: Row => _next_row = row
-    | EndOfRows => _done = true; _next_row = None
-    | let _: FetchError => _error = true; _next_row = None
+    | let row: Row => _next = row
+    | EndOfRows => _done = true; _next = None
+    | let e: FetchError => _next = e; _done = true
     end
 
   fun ref has_next(): Bool =>
-    not (_done or _error)
+    _next isnt None
 
-  fun ref next(): Row val ? =>
-    match _next_row
+  fun ref next(): (Row val | FetchError) ? =>
+    match _next
     | let row: Row =>
-      _next_row = None
+      _next = None
       _prefetch()
       row
+    | let e: FetchError =>
+      _next = None
+      e
     else
       error
     end

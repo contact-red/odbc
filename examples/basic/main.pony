@@ -49,29 +49,34 @@ actor Main
         "SELECT id, name, price FROM _odbc_example"
       match \exhaustive\ conn.query(sel)
       | let cursor: Cursor =>
-        for row in cursor.values() do
-          try
-            let id =
-              match \exhaustive\ row.int(ColIndex(1))?
-              | let v: I64 => v.string()
-              | SqlNull => "NULL"
-              end
-            let name =
-              match \exhaustive\ row.text(ColIndex(2))?
-              | let v: String val => v
-              | SqlNull => "NULL"
-              end
-            let price =
-              match \exhaustive\ row.float(ColIndex(3))?
-              | let v: F64 => v.string()
-              | SqlNull => "NULL"
-              end
-            env.out.print(
-              "  id=" + id
-                + " name=" + name
-                + " price=" + price)
-          else
-            env.err.print("  column read error")
+        for result in cursor.values() do
+          match result
+          | let row: Row =>
+            try
+              let id =
+                match \exhaustive\ row.int(ColIndex(1))?
+                | let v: I64 => v.string()
+                | SqlNull => "NULL"
+                end
+              let name =
+                match \exhaustive\ row.text(ColIndex(2))?
+                | let v: String val => v
+                | SqlNull => "NULL"
+                end
+              let price =
+                match \exhaustive\ row.float(ColIndex(3))?
+                | let v: F64 => v.string()
+                | SqlNull => "NULL"
+                end
+              env.out.print(
+                "  id=" + id
+                  + " name=" + name
+                  + " price=" + price)
+            else
+              env.err.print("  column read error")
+            end
+          | let e: FetchError =>
+            env.err.print("  fetch error: " + e.string())
           end
         end
         cursor.close()

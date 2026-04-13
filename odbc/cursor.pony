@@ -104,7 +104,7 @@ class ref Cursor
   fun ref values(): CursorIterator =>
     """
     Return an iterator for use with Pony's `for` loop.
-    FetchError during iteration raises error from next().
+    Yields (Row val | FetchError) — match on each result.
     """
     CursorIterator(this)
 
