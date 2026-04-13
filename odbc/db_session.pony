@@ -45,8 +45,7 @@ actor DbSession
     promise: Promise[(Array[Row val] val | ExecError)]) =>
     """
     Execute a SELECT and fulfill the promise with all rows.
-    Fetches all rows into memory — for large result sets, use
-    query_each() instead.
+    Fetches all rows into memory.
     """
     match \exhaustive\ _conn
     | let conn: Connection =>

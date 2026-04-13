@@ -39,10 +39,9 @@ class ref _ColumnBindings
 
     var col: U16 = 1
     while col <= nc.u16() do
-      // Describe column
-      let name_buf: String ref = String(256)
-      var j: USize = 0
-      while j < 256 do name_buf.push(0); j = j + 1 end
+      // Describe column — we only need data_type and col_size,
+      // but SQLDescribeCol requires a name buffer
+      let name_buf = Array[U8].init(0, 2)
       var name_len: I16 = 0
       var data_type: I16 = 0
       var col_size: U64 = 0
@@ -53,7 +52,7 @@ class ref _ColumnBindings
         hstmt,
         col,
         name_buf.cpointer(),
-        256,
+        2,
         addressof name_len,
         addressof data_type,
         addressof col_size,
@@ -102,7 +101,7 @@ class ref _ColumnBindings
         let buf_size =
           (col_size + 1).usize().max(4096).min(16_777_216) // 4 KB .. 16 MB
         let tbuf: String ref = String(buf_size)
-        j = 0
+        var j: USize = 0
         while j < buf_size do tbuf.push(0); j = j + 1 end
 
         _fixed_bufs.push(Array[U8])
