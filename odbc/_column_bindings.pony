@@ -237,22 +237,21 @@ class ref _ColumnBindings
   fun ref build_row_into(row: MutableRow): (MutableRow | FetchError) =>
     """
     Overwrite a MutableRow with values from the current fetch.
-    Reuses the row object — no allocation for the row itself or its
-    column array (though SqlText/SqlDecimal values are still allocated
+    Reuses the row object and its column array — no allocation for the
+    row container (though SqlText/SqlDecimal values are still allocated
     since they own their string data).
     """
-    let columns = Array[SqlValue](_num_cols)
+    row._clear()
 
     var i: USize = 0
     while i < _num_cols do
       match \exhaustive\ _read_column_value(i)
-      | let sv: SqlValue => columns.push(sv)
+      | let sv: SqlValue => row._push(sv)
       | let e: FetchError => return e
       end
       i = i + 1
     end
 
-    row._set_columns(columns)
     row
 
   fun ref _read_column_value(i: USize): (SqlValue | FetchError) =>

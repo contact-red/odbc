@@ -12,8 +12,11 @@ class ref MutableRow
   new ref create(num_cols: USize = 0) =>
     _columns = Array[SqlValue](num_cols)
 
-  fun ref _set_columns(columns: Array[SqlValue] ref) =>
-    _columns = columns
+  fun ref _clear() =>
+    _columns.clear()
+
+  fun ref _push(v: SqlValue) =>
+    _columns.push(v)
 
   fun column(i: ColIndex): SqlValue ? =>
     """
