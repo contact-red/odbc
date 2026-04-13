@@ -11,7 +11,9 @@ class ref Cursor
   var _last_warnings: (Warnings | None)
   var _col_bindings: (_ColumnBindings | None)
 
-  new ref _create(hstmt: Pointer[None] tag, conn_alive: _AliveFlag ref,
+  new ref _create(
+    hstmt: Pointer[None] tag,
+    conn_alive: _AliveFlag ref,
     validate_utf8: Bool = true) =>
     _hstmt = hstmt
     _conn_alive = conn_alive
@@ -25,7 +27,9 @@ class ref Cursor
     Fetch the next row.
     """
     if _closed then return FetchError(CursorClosed) end
-    if not _conn_alive.is_alive() then return FetchError(FetchConnectionClosed) end
+    if not _conn_alive.is_alive() then
+      return FetchError(FetchConnectionClosed)
+    end
 
     let rc = @SQLFetch(_hstmt)
 
@@ -33,11 +37,12 @@ class ref Cursor
       return EndOfRows
     end
 
-    _last_warnings = if _ODBC.has_info(rc) then
-      Warnings(_DiagHelper.read(_ODBC.handle_stmt(), _hstmt))
-    else
-      None
-    end
+    _last_warnings =
+      if _ODBC.has_info(rc) then
+        Warnings(_DiagHelper.read(_ODBC.handle_stmt(), _hstmt))
+      else
+        None
+      end
 
     if not _ODBC.ok(rc) then
       let diag = _DiagHelper.read(_ODBC.handle_stmt(), _hstmt)
@@ -54,7 +59,9 @@ class ref Cursor
     Fetch the next row into a reusable MutableRow.
     """
     if _closed then return FetchError(CursorClosed) end
-    if not _conn_alive.is_alive() then return FetchError(FetchConnectionClosed) end
+    if not _conn_alive.is_alive() then
+      return FetchError(FetchConnectionClosed)
+    end
 
     let rc = @SQLFetch(_hstmt)
 
@@ -62,11 +69,12 @@ class ref Cursor
       return EndOfRows
     end
 
-    _last_warnings = if _ODBC.has_info(rc) then
-      Warnings(_DiagHelper.read(_ODBC.handle_stmt(), _hstmt))
-    else
-      None
-    end
+    _last_warnings =
+      if _ODBC.has_info(rc) then
+        Warnings(_DiagHelper.read(_ODBC.handle_stmt(), _hstmt))
+      else
+        None
+      end
 
     if not _ODBC.ok(rc) then
       let diag = _DiagHelper.read(_ODBC.handle_stmt(), _hstmt)

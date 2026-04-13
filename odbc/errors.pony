@@ -1,6 +1,9 @@
-// --- Connect errors ---
+
 
 class val ConnectError
+  """
+  Error connecting to an ODBC data source.
+  """
   let _kind: ConnectErrorKind
   let _diag: DiagChain
 
@@ -37,21 +40,34 @@ class val ConnectError
 type ConnectErrorKind is (EnvAllocFailed | DbcAllocFailed | DriverConnectFailed)
 
 primitive EnvAllocFailed
+  """
+  ODBC environment handle allocation failed.
+  """
   fun string(): String val => "environment allocation failed"
+
 primitive DbcAllocFailed
+  """
+  ODBC connection handle allocation failed.
+  """
   fun string(): String val => "connection allocation failed"
+
 primitive DriverConnectFailed
+  """
+  ODBC driver connect call failed.
+  """
   fun string(): String val => "driver connect failed"
 
-
-// --- Exec errors ---
-
 class val ExecError
+  """
+  Error executing a SQL statement.
+  """
   let _kind: ExecErrorKind
   let _diag: DiagChain
   let _sql: (String val | None)
 
-  new val create(kind': ExecErrorKind, diag': DiagChain,
+  new val create(
+    kind': ExecErrorKind,
+    diag': DiagChain,
     sql': (String val | None) = None) =>
     _kind = kind'
     _diag = diag'
@@ -92,33 +108,70 @@ type ExecErrorKind is
   )
 
 primitive QueryError
+  """
+  General driver-reported SQL error.
+  """
   fun string(): String val => "query error"
+
 primitive ConstraintViolation
+  """
+  Integrity constraint violation (SQLSTATE 23xxx).
+  """
   fun string(): String val => "constraint violation"
+
 primitive SyntaxError
+  """
+  SQL syntax error or access rule violation (SQLSTATE 42xxx).
+  """
   fun string(): String val => "syntax error"
+
 primitive ConnectionLost
+  """
+  Connection to the database was lost.
+  """
   fun string(): String val => "connection lost"
+
 primitive UnboundParams
+  """
+  Not all parameters were bound before execute.
+  """
   fun string(): String val => "unbound parameters"
+
 primitive StatementClosed
+  """
+  Operation attempted on a closed statement.
+  """
   fun string(): String val => "statement closed"
+
 primitive ConnectionClosed
+  """
+  Operation attempted on a closed connection.
+  """
   fun string(): String val => "connection closed"
+
 primitive CursorNotOpen
+  """
+  Fetch attempted without an open cursor.
+  """
   fun string(): String val => "cursor not open"
+
 primitive CursorAlreadyOpen
+  """
+  Execute attempted while a cursor is open.
+  """
   fun string(): String val => "cursor already open"
 
-
-// --- Prepare errors ---
-
 class val PrepareError
+  """
+  Error preparing a SQL statement.
+  """
   let _kind: PrepareErrorKind
   let _diag: DiagChain
   let _sql: (String val | None)
 
-  new val create(kind': PrepareErrorKind, diag': DiagChain,
+  new val create(
+    kind': PrepareErrorKind,
+    diag': DiagChain,
     sql': (String val | None) = None) =>
     _kind = kind'
     _diag = diag'
@@ -144,20 +197,30 @@ class val PrepareError
   fun unsafe_diag(): DiagChain => _diag
 
 type PrepareErrorKind is (DriverPrepareError | PrepareConnectionClosed)
+
 primitive DriverPrepareError
+  """
+  ODBC driver rejected the prepare call.
+  """
   fun string(): String val => "prepare failed"
+
 primitive PrepareConnectionClosed
+  """
+  Prepare attempted on a closed connection.
+  """
   fun string(): String val => "connection closed"
 
-
-// --- Bind errors ---
-
 class val BindError
+  """
+  Error binding a parameter value.
+  """
   let _kind: BindErrorKind
   let _param_index: ParamIndex
   let _diag: DiagChain
 
-  new val create(kind': BindErrorKind, param_index': ParamIndex,
+  new val create(
+    kind': BindErrorKind,
+    param_index': ParamIndex,
     diag': DiagChain = recover val Array[DiagRecord] end) =>
     _kind = kind'
     _param_index = param_index'
@@ -168,13 +231,12 @@ class val BindError
 
   fun string(): String iso^ =>
     recover iso
-      let s = String
-      s.append("BindError: ")
-      s.append(_kind.string())
-      s.append(" (param ")
-      s.append(_param_index.apply().string())
-      s.append(")")
-      s
+      String
+        .> append("BindError: ")
+        .> append(_kind.string())
+        .> append(" (param ")
+        .> append(_param_index.apply().string())
+        .> append(")")
     end
 
   fun unsafe_diag(): DiagChain => _diag
@@ -182,16 +244,27 @@ class val BindError
 type BindErrorKind is (ParamIndexOutOfRange | ParamTooLarge | DriverRejected)
 
 primitive ParamIndexOutOfRange
+  """
+  Parameter index is zero or exceeds param count.
+  """
   fun string(): String val => "index out of range"
+
 primitive ParamTooLarge
+  """
+  Parameter value exceeds maximum size.
+  """
   fun string(): String val => "parameter too large"
+
 primitive DriverRejected
+  """
+  ODBC driver rejected the bind call.
+  """
   fun string(): String val => "driver rejected"
 
-
-// --- Fetch errors ---
-
 class val FetchError
+  """
+  Error fetching a row from a result set.
+  """
   let _kind: FetchErrorKind
   let _diag: DiagChain
 
@@ -229,24 +302,51 @@ type FetchErrorKind is
   )
 
 primitive DriverFetchError
+  """
+  General driver-reported fetch failure.
+  """
   fun string(): String val => "fetch failed"
+
 primitive ColumnTooLarge
+  """
+  Column data exceeds maximum size.
+  """
   fun string(): String val => "column too large"
+
 primitive UnsupportedColumnType
+  """
+  Column SQL type has no SqlValue mapping.
+  """
   fun string(): String val => "unsupported column type"
+
 primitive InvalidUtf8
+  """
+  Text column data failed UTF-8 validation.
+  """
   fun string(): String val => "invalid UTF-8"
+
 primitive FetchConnectionLost
+  """
+  Connection lost during fetch.
+  """
   fun string(): String val => "connection lost"
+
 primitive FetchConnectionClosed
+  """
+  Fetch attempted after connection closed.
+  """
   fun string(): String val => "connection closed"
+
 primitive CursorClosed
+  """
+  Fetch attempted on a closed cursor.
+  """
   fun string(): String val => "cursor closed"
 
-
-// --- Transaction errors ---
-
 class val TxBeginError
+  """
+  Error beginning a transaction.
+  """
   let _kind: TxBeginErrorKind
   let _diag: DiagChain
 
@@ -259,10 +359,9 @@ class val TxBeginError
 
   fun string(): String iso^ =>
     recover iso
-      let s = String
-      s.append("TxBeginError: ")
-      s.append(_kind.string())
-      s
+      String
+        .> append("TxBeginError: ")
+        .> append(_kind.string())
     end
 
   fun unsafe_diag(): DiagChain => _diag
@@ -271,14 +370,27 @@ type TxBeginErrorKind is
   (AlreadyInTransaction | TxBeginConnectionClosed | DriverTxError)
 
 primitive AlreadyInTransaction
+  """
+  Begin called while already in a transaction.
+  """
   fun string(): String val => "already in transaction"
+
 primitive TxBeginConnectionClosed
+  """
+  Begin attempted on a closed connection.
+  """
   fun string(): String val => "connection closed"
+
 primitive DriverTxError
+  """
+  ODBC driver rejected the transaction operation.
+  """
   fun string(): String val => "driver error"
 
-
 class val TxCommitError
+  """
+  Error committing a transaction.
+  """
   let _verdict: TxCommitVerdict
   let _diag: DiagChain
 
@@ -308,14 +420,27 @@ class val TxCommitError
 type TxCommitVerdict is (CommitFailed | CommitAmbiguous | NotInTransaction)
 
 primitive CommitFailed
+  """
+  Server rejected the commit; transaction rolled back.
+  """
   fun string(): String val => "commit failed (rolled back by server)"
+
 primitive CommitAmbiguous
+  """
+  Commit outcome unknown; reconnect required.
+  """
   fun string(): String val => "commit result unknown (reconnect required)"
+
 primitive NotInTransaction
+  """
+  Commit or rollback called without an active transaction.
+  """
   fun string(): String val => "not in transaction"
 
-
 class val TxRollbackError
+  """
+  Error rolling back a transaction.
+  """
   let _kind: TxRollbackErrorKind
   let _diag: DiagChain
 
@@ -328,10 +453,9 @@ class val TxRollbackError
 
   fun string(): String iso^ =>
     recover iso
-      let s = String
-      s.append("TxRollbackError: ")
-      s.append(_kind.string())
-      s
+      String
+        .> append("TxRollbackError: ")
+        .> append(_kind.string())
     end
 
   fun unsafe_diag(): DiagChain => _diag
@@ -339,14 +463,21 @@ class val TxRollbackError
 type TxRollbackErrorKind is (RollbackNotInTransaction | DriverRollbackError)
 
 primitive RollbackNotInTransaction
+  """
+  Rollback called without an active transaction.
+  """
   fun string(): String val => "not in transaction"
+
 primitive DriverRollbackError
+  """
+  ODBC driver reported an error during rollback.
+  """
   fun string(): String val => "driver error"
 
-
-// --- Warnings ---
-
 class val Warnings
+  """
+  Diagnostic records from SQL_SUCCESS_WITH_INFO.
+  """
   let _diag: DiagChain
 
   new val create(diag': DiagChain) =>
@@ -357,11 +488,10 @@ class val Warnings
     Redacted summary.
     """
     recover iso
-      let s = String
-      s.append("Warnings: ")
-      s.append(_diag.size().string())
-      s.append(" diagnostic record(s)")
-      s
+      String
+        .> append("Warnings: ")
+        .> append(_diag.size().string())
+        .> append(" diagnostic record(s)")
     end
 
   fun unsafe_diag(): DiagChain =>
@@ -369,9 +499,6 @@ class val Warnings
     Raw diagnostic chain. May contain credential-bearing text.
     """
     _diag
-
-
-// --- Helpers ---
 
 primitive ExecErrorClassifier
   """
@@ -382,7 +509,8 @@ primitive ExecErrorClassifier
     try
       let state = diag(0)?.sqlstate
       if state.size() >= 2 then
-        let class2 = recover val
+        let class2 =
+          recover val
           let s = String(2)
           try s.push(state(0)?); s.push(state(1)?) end
           s

@@ -14,7 +14,6 @@ class val Dsn
     """
     _raw
 
-
 class val ParamIndex
   """
   1-based parameter index. Bounds checking happens at bind time.
@@ -28,7 +27,6 @@ class val ParamIndex
 
   fun string(): String iso^ =>
     _n.string()
-
 
 class val ColIndex
   """
@@ -44,19 +42,16 @@ class val ColIndex
   fun string(): String iso^ =>
     _n.string()
 
-
 type RowCount is (USize | None)
   """
   Result of exec/execute_update. USize is affected row count.
   None means the driver returned SQL_NO_ROW_COUNT (-1).
   """
 
-
 primitive EndOfRows
   """
   Returned by fetch() when no more rows are available.
   """
-
 
 type SqlValue is
   ( SqlNull | SqlBool | SqlInt | SqlFloat | SqlText
@@ -65,15 +60,16 @@ type SqlValue is
   Union of all supported SQL value types.
   """
 
-
 primitive SqlNull
   """
   SQL NULL value.
   """
   fun string(): String val => "NULL"
 
-
 class val SqlBool
+  """
+  SQL boolean value.
+  """
   let value: Bool
 
   new val create(v: Bool) =>
@@ -81,7 +77,6 @@ class val SqlBool
 
   fun string(): String iso^ =>
     value.string()
-
 
 class val SqlInt
   """
@@ -96,7 +91,6 @@ class val SqlInt
   fun string(): String iso^ =>
     value.string()
 
-
 class val SqlFloat
   """
   Wraps F64. All float column types (REAL, DOUBLE, FLOAT) are read
@@ -110,7 +104,6 @@ class val SqlFloat
   fun string(): String iso^ =>
     value.string()
 
-
 class val SqlText
   """
   Wraps String val. Validated UTF-8 at the FFI boundary.
@@ -122,7 +115,6 @@ class val SqlText
 
   fun string(): String iso^ =>
     value.string()
-
 
 class val SqlDate
   """
@@ -149,7 +141,6 @@ class val SqlDate
       s.append(day.string())
       s
     end
-
 
 class val SqlTime
   """
@@ -178,7 +169,6 @@ class val SqlTime
       s
     end
 
-
 class val SqlTimestamp
   """
   SQL TIMESTAMP. Date + time + fractional seconds (nanoseconds).
@@ -191,8 +181,15 @@ class val SqlTimestamp
   let second: U16
   let fraction: U32
 
-  new val create(year': I16, month': U16, day': U16,
-    hour': U16, minute': U16, second': U16, fraction': U32 = 0) =>
+  new val create(
+    year': I16,
+    month': U16,
+    day': U16,
+    hour': U16,
+    minute': U16,
+    second': U16,
+    fraction': U32 = 0)
+  =>
     year = year'
     month = month'
     day = day'
@@ -226,7 +223,6 @@ class val SqlTimestamp
       end
       s
     end
-
 
 class val SqlDecimal
   """

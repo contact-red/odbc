@@ -34,18 +34,15 @@ primitive _TestSetup
     | let e: ExecError => h.fail("exec: " + e.string() + " sql: " + sql)
     end
 
-
 class iso _ConnectDisconnectTest is UnitTest
   fun name(): String => "integration: connect and disconnect"
 
   fun apply(h: TestHelper) =>
     try
-      let conn = _TestSetup.connect(h)?
-      conn.close()
-      // Double close should be idempotent
-      conn.close()
+      _TestSetup.connect(h)?
+        .> close()
+        .> close()
     end
-
 
 class iso _ExecDdlTest is UnitTest
   fun name(): String => "integration: exec DDL returns row count"
@@ -71,7 +68,6 @@ class iso _ExecDdlTest is UnitTest
       conn.close()
     end
 
-
 class iso _QueryRoundtripTest is UnitTest
   fun name(): String => "integration: query roundtrip for all types"
 
@@ -79,10 +75,13 @@ class iso _QueryRoundtripTest is UnitTest
     try
       let conn = _TestSetup.connect(h)?
       _TestSetup.exec(conn, "DROP TABLE IF EXISTS _test_types", h)
-      _TestSetup.exec(conn,
-        "CREATE TABLE _test_types (i INTEGER, b BIGINT, f DOUBLE PRECISION, t VARCHAR(64))", h)
-      _TestSetup.exec(conn,
-        "INSERT INTO _test_types VALUES (42, 9000000000, 3.14, 'hello world')", h)
+      let ct = "CREATE TABLE _test_types"
+        + " (i INTEGER, b BIGINT,"
+        + " f DOUBLE PRECISION, t VARCHAR(64))"
+      _TestSetup.exec(conn, ct, h)
+      let ins = "INSERT INTO _test_types VALUES"
+        + " (42, 9000000000, 3.14, 'hello world')"
+      _TestSetup.exec(conn, ins, h)
 
       match \exhaustive\ conn.query("SELECT i, b, f, t FROM _test_types")
       | let cursor: Cursor =>
@@ -102,7 +101,8 @@ class iso _QueryRoundtripTest is UnitTest
             // Float
             match row.float(ColIndex(3))?
             | let v: F64 =>
-              h.assert_true((v - 3.14).abs() < 0.001,
+              h.assert_true(
+                (v - 3.14).abs() < 0.001,
                 "float mismatch: " + v.string())
             else h.fail("col 3 was null")
             end
@@ -131,7 +131,6 @@ class iso _QueryRoundtripTest is UnitTest
       conn.close()
     end
 
-
 class iso _NullRoundtripTest is UnitTest
   fun name(): String => "integration: NULL roundtrip"
 
@@ -139,10 +138,10 @@ class iso _NullRoundtripTest is UnitTest
     try
       let conn = _TestSetup.connect(h)?
       _TestSetup.exec(conn, "DROP TABLE IF EXISTS _test_null", h)
-      _TestSetup.exec(conn,
-        "CREATE TABLE _test_null (a INTEGER, b VARCHAR(32))", h)
-      _TestSetup.exec(conn,
-        "INSERT INTO _test_null VALUES (NULL, NULL)", h)
+      _TestSetup.exec(
+        conn, "CREATE TABLE _test_null (a INTEGER, b VARCHAR(32))", h)
+      _TestSetup.exec(
+        conn, "INSERT INTO _test_null VALUES (NULL, NULL)", h)
 
       match \exhaustive\ conn.query("SELECT a, b FROM _test_null")
       | let cursor: Cursor =>
@@ -175,7 +174,6 @@ class iso _NullRoundtripTest is UnitTest
       conn.close()
     end
 
-
 class iso _PreparedStatementTest is UnitTest
   fun name(): String => "integration: prepared statement with params"
 
@@ -183,8 +181,8 @@ class iso _PreparedStatementTest is UnitTest
     try
       let conn = _TestSetup.connect(h)?
       _TestSetup.exec(conn, "DROP TABLE IF EXISTS _test_prep", h)
-      _TestSetup.exec(conn,
-        "CREATE TABLE _test_prep (id INTEGER, name VARCHAR(64))", h)
+      _TestSetup.exec(
+        conn, "CREATE TABLE _test_prep (id INTEGER, name VARCHAR(64))", h)
 
       match \exhaustive\ conn.prepare("INSERT INTO _test_prep VALUES (?, ?)")
       | let stmt: Statement =>
@@ -219,7 +217,8 @@ class iso _PreparedStatementTest is UnitTest
       end
 
       // Verify both rows exist
-      match \exhaustive\ conn.query("SELECT id, name FROM _test_prep ORDER BY id")
+      match \exhaustive\
+        conn.query("SELECT id, name FROM _test_prep ORDER BY id")
       | let cursor: Cursor =>
         match cursor.fetch()
         | let row: Row =>
@@ -249,7 +248,6 @@ class iso _PreparedStatementTest is UnitTest
       conn.close()
     end
 
-
 class iso _StatementReuseTest is UnitTest
   fun name(): String => "integration: statement reuse via close_cursor"
 
@@ -257,12 +255,13 @@ class iso _StatementReuseTest is UnitTest
     try
       let conn = _TestSetup.connect(h)?
       _TestSetup.exec(conn, "DROP TABLE IF EXISTS _test_reuse", h)
-      _TestSetup.exec(conn,
-        "CREATE TABLE _test_reuse (id INTEGER, val VARCHAR(32))", h)
+      _TestSetup.exec(
+        conn, "CREATE TABLE _test_reuse (id INTEGER, val VARCHAR(32))", h)
       _TestSetup.exec(conn, "INSERT INTO _test_reuse VALUES (1, 'one')", h)
       _TestSetup.exec(conn, "INSERT INTO _test_reuse VALUES (2, 'two')", h)
 
-      match \exhaustive\ conn.prepare("SELECT val FROM _test_reuse WHERE id = ?")
+      match \exhaustive\
+        conn.prepare("SELECT val FROM _test_reuse WHERE id = ?")
       | let stmt: Statement =>
         // First query: id=1
         match stmt.bind(ParamIndex(1), SqlInt(1))
@@ -305,7 +304,6 @@ class iso _StatementReuseTest is UnitTest
       conn.close()
     end
 
-
 class iso _TransactionTest is UnitTest
   fun name(): String => "integration: transaction commit and rollback"
 
@@ -313,8 +311,8 @@ class iso _TransactionTest is UnitTest
     try
       let conn = _TestSetup.connect(h)?
       _TestSetup.exec(conn, "DROP TABLE IF EXISTS _test_tx", h)
-      _TestSetup.exec(conn,
-        "CREATE TABLE _test_tx (id INTEGER)", h)
+      _TestSetup.exec(
+        conn, "CREATE TABLE _test_tx (id INTEGER)", h)
 
       // Test commit
       match conn.begin()
@@ -356,7 +354,11 @@ class iso _TransactionTest is UnitTest
         | let row: Row =>
           try
             match row.int(ColIndex(1))?
-            | let v: I64 => h.assert_eq[I64](1, v, "should still be 1 after rollback")
+            | let v: I64 =>
+              h.assert_eq[I64](
+                1,
+                v,
+                "should still be 1 after rollback")
             else h.fail("count null") end
           else h.fail("read") end
         else h.fail("no row") end
@@ -367,7 +369,6 @@ class iso _TransactionTest is UnitTest
       _TestSetup.exec(conn, "DROP TABLE IF EXISTS _test_tx", h)
       conn.close()
     end
-
 
 class iso _ErrorPathsTest is UnitTest
   fun name(): String => "integration: error paths"
@@ -384,7 +385,8 @@ class iso _ErrorPathsTest is UnitTest
       end
       // Verify string() is redacted
       let s: String val = e.string()
-      h.assert_false(s.contains("postgres"),
+      h.assert_false(
+        s.contains("postgres"),
         "error string should not contain password")
     end
 
@@ -414,7 +416,6 @@ class iso _ErrorPathsTest is UnitTest
         h.fail("exec on closed conn should error")
       end
     end
-
 
 class iso _DoubleCloseTest is UnitTest
   fun name(): String => "integration: double close is idempotent"
@@ -451,7 +452,6 @@ class iso _DoubleCloseTest is UnitTest
       end
     end
 
-
 class iso _CursorValuesTest is UnitTest
   fun name(): String => "integration: cursor.values() iterator"
 
@@ -459,13 +459,14 @@ class iso _CursorValuesTest is UnitTest
     try
       let conn = _TestSetup.connect(h)?
       _TestSetup.exec(conn, "DROP TABLE IF EXISTS _test_iter", h)
-      _TestSetup.exec(conn,
-        "CREATE TABLE _test_iter (id INTEGER, name VARCHAR(32))", h)
+      _TestSetup.exec(
+        conn, "CREATE TABLE _test_iter (id INTEGER, name VARCHAR(32))", h)
       _TestSetup.exec(conn, "INSERT INTO _test_iter VALUES (1, 'one')", h)
       _TestSetup.exec(conn, "INSERT INTO _test_iter VALUES (2, 'two')", h)
       _TestSetup.exec(conn, "INSERT INTO _test_iter VALUES (3, 'three')", h)
 
-      match \exhaustive\ conn.query("SELECT id, name FROM _test_iter ORDER BY id")
+      match \exhaustive\
+        conn.query("SELECT id, name FROM _test_iter ORDER BY id")
       | let cursor: Cursor =>
         var count: USize = 0
         for row in cursor.values() do
@@ -488,7 +489,6 @@ class iso _CursorValuesTest is UnitTest
       conn.close()
     end
 
-
 class iso _StatementValuesTest is UnitTest
   fun name(): String => "integration: statement.values() iterator"
 
@@ -496,12 +496,13 @@ class iso _StatementValuesTest is UnitTest
     try
       let conn = _TestSetup.connect(h)?
       _TestSetup.exec(conn, "DROP TABLE IF EXISTS _test_siter", h)
-      _TestSetup.exec(conn,
-        "CREATE TABLE _test_siter (id INTEGER)", h)
+      _TestSetup.exec(
+        conn, "CREATE TABLE _test_siter (id INTEGER)", h)
       _TestSetup.exec(conn, "INSERT INTO _test_siter VALUES (10)", h)
       _TestSetup.exec(conn, "INSERT INTO _test_siter VALUES (20)", h)
 
-      match \exhaustive\ conn.prepare("SELECT id FROM _test_siter WHERE id > ? ORDER BY id")
+      match \exhaustive\
+        conn.prepare("SELECT id FROM _test_siter WHERE id > ? ORDER BY id")
       | let stmt: Statement =>
         match stmt.bind(ParamIndex(1), SqlInt(5))
         | let e: BindError => h.fail("bind: " + e.string())
@@ -531,7 +532,6 @@ class iso _StatementValuesTest is UnitTest
       conn.close()
     end
 
-
 class iso _DateTimeTypesTest is UnitTest
   fun name(): String => "integration: date/time/timestamp types"
 
@@ -539,10 +539,12 @@ class iso _DateTimeTypesTest is UnitTest
     try
       let conn = _TestSetup.connect(h)?
       _TestSetup.exec(conn, "DROP TABLE IF EXISTS _test_dt", h)
-      _TestSetup.exec(conn,
-        "CREATE TABLE _test_dt (d DATE, t TIME, ts TIMESTAMP)", h)
-      _TestSetup.exec(conn,
-        "INSERT INTO _test_dt VALUES ('2025-06-15', '14:30:45', '2025-06-15 14:30:45')", h)
+      _TestSetup.exec(
+        conn, "CREATE TABLE _test_dt (d DATE, t TIME, ts TIMESTAMP)", h)
+      let dt_ins = "INSERT INTO _test_dt VALUES"
+        + " ('2025-06-15', '14:30:45',"
+        + " '2025-06-15 14:30:45')"
+      _TestSetup.exec(conn, dt_ins, h)
 
       match \exhaustive\ conn.query("SELECT d, t, ts FROM _test_dt")
       | let cursor: Cursor =>
@@ -589,7 +591,6 @@ class iso _DateTimeTypesTest is UnitTest
       conn.close()
     end
 
-
 class iso _DecimalTypesTest is UnitTest
   fun name(): String => "integration: decimal/numeric types"
 
@@ -597,10 +598,12 @@ class iso _DecimalTypesTest is UnitTest
     try
       let conn = _TestSetup.connect(h)?
       _TestSetup.exec(conn, "DROP TABLE IF EXISTS _test_dec", h)
-      _TestSetup.exec(conn,
-        "CREATE TABLE _test_dec (price NUMERIC(10,2), amount DECIMAL(15,4))", h)
-      _TestSetup.exec(conn,
-        "INSERT INTO _test_dec VALUES (123.45, 9876543.2100)", h)
+      let dec_ct = "CREATE TABLE _test_dec"
+        + " (price NUMERIC(10,2),"
+        + " amount DECIMAL(15,4))"
+      _TestSetup.exec(conn, dec_ct, h)
+      _TestSetup.exec(
+        conn, "INSERT INTO _test_dec VALUES (123.45, 9876543.2100)", h)
 
       match \exhaustive\ conn.query("SELECT price, amount FROM _test_dec")
       | let cursor: Cursor =>
@@ -609,14 +612,16 @@ class iso _DecimalTypesTest is UnitTest
           try
             match \exhaustive\ row.decimal(ColIndex(1))?
             | let d: SqlDecimal =>
-              h.assert_true(d.value.contains("123.45"),
+              h.assert_true(
+                d.value.contains("123.45"),
                 "expected 123.45 in: " + d.value)
             | SqlNull => h.fail("price was null")
             end
 
             match \exhaustive\ row.decimal(ColIndex(2))?
             | let d: SqlDecimal =>
-              h.assert_true(d.value.contains("9876543.21"),
+              h.assert_true(
+                d.value.contains("9876543.21"),
                 "expected 9876543.21 in: " + d.value)
             | SqlNull => h.fail("amount was null")
             end
@@ -634,7 +639,6 @@ class iso _DecimalTypesTest is UnitTest
       conn.close()
     end
 
-
 class iso _FetchIntoTest is UnitTest
   fun name(): String => "integration: fetch_into reuses MutableRow"
 
@@ -642,8 +646,8 @@ class iso _FetchIntoTest is UnitTest
     try
       let conn = _TestSetup.connect(h)?
       _TestSetup.exec(conn, "DROP TABLE IF EXISTS _test_fi", h)
-      _TestSetup.exec(conn,
-        "CREATE TABLE _test_fi (id INTEGER, name VARCHAR(32))", h)
+      _TestSetup.exec(
+        conn, "CREATE TABLE _test_fi (id INTEGER, name VARCHAR(32))", h)
       _TestSetup.exec(conn, "INSERT INTO _test_fi VALUES (1, 'one')", h)
       _TestSetup.exec(conn, "INSERT INTO _test_fi VALUES (2, 'two')", h)
       _TestSetup.exec(conn, "INSERT INTO _test_fi VALUES (3, 'three')", h)
@@ -689,7 +693,6 @@ class iso _FetchIntoTest is UnitTest
       conn.close()
     end
 
-
 class iso _PartialFunctionTest is UnitTest
   fun name(): String => "integration: partial function variants"
 
@@ -711,10 +714,13 @@ class iso _PartialFunctionTest is UnitTest
 
       // Prepared statement with partial variants
       try
-        let stmt = conn.prepare_p("INSERT INTO _test_pf VALUES (?, ?)")?
-        stmt.bind_p(ParamIndex(1), SqlInt(3))?
-        stmt.bind_p(ParamIndex(2), SqlText("carol"))?
-        stmt.execute_update_p()?
+        let stmt =
+          conn.prepare_p(
+            "INSERT INTO _test_pf VALUES (?, ?)")?
+        stmt
+          .> bind_p(ParamIndex(1), SqlInt(3))?
+          .> bind_p(ParamIndex(2), SqlText("carol"))?
+          .> execute_update_p()?
 
         stmt.bind_p(ParamIndex(1), SqlInt(4))?
         stmt.bind_p(ParamIndex(2), SqlText("dave"))?
@@ -761,7 +767,6 @@ class iso _PartialFunctionTest is UnitTest
       conn.close()
     end
 
-
 class iso _DbSessionTest is UnitTest
   fun name(): String => "integration: DbSession actor with promises"
 
@@ -778,7 +783,8 @@ class iso _DbSessionTest is UnitTest
     p_drop.next[None](
       {(result: (RowCount | ExecError))(db, h) =>
         let p_create = Promise[(RowCount | ExecError)]
-        db.exec("CREATE TABLE _test_session (id INTEGER, name VARCHAR(32))",
+        db.exec(
+          "CREATE TABLE _test_session (id INTEGER, name VARCHAR(32))",
           p_create)
 
         p_create.next[None](

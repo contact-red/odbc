@@ -1,3 +1,4 @@
+use "lib:odbc"
 use "../../odbc"
 
 actor Main

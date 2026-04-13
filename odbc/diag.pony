@@ -6,7 +6,11 @@ class val DiagRecord
   let native_code: I32
   let _message: String val
 
-  new val create(sqlstate': String val, native_code': I32, message': String val) =>
+  new val create(
+    sqlstate': String val,
+    native_code': I32,
+    message': String val)
+  =>
     sqlstate = sqlstate'
     native_code = native_code'
     _message = message'
@@ -16,17 +20,14 @@ class val DiagRecord
 
   fun string(): String iso^ =>
     recover iso
-      let s = String
-      s.append("[")
-      s.append(sqlstate)
-      s.append("] ")
-      s.append(_message)
-      s
+      String
+        .> append("[")
+        .> append(sqlstate)
+        .> append("] ")
+        .> append(_message)
     end
 
-
 type DiagChain is Array[DiagRecord] val
-
 
 primitive _DiagHelper
   """
@@ -67,9 +68,16 @@ primitive _DiagHelper
       var native: I32 = 0
       var msg_len: I16 = 0
 
-      let rc = @SQLGetDiagRec(handle_type, handle, rec_num,
-        state_buf.cpointer(), addressof native,
-        msg_buf.cpointer(), _max_message_bytes().i16(), addressof msg_len)
+      let rc =
+        @SQLGetDiagRec(
+        handle_type,
+        handle,
+        rec_num,
+        state_buf.cpointer(),
+        addressof native,
+        msg_buf.cpointer(),
+        _max_message_bytes().i16(),
+        addressof msg_len)
 
       if not _ODBC.ok(rc) then break end
 
@@ -78,19 +86,24 @@ primitive _DiagHelper
 
       // Extract message, capped
       let actual_len = msg_len.usize().min(_max_message_bytes())
-      let msg: String val = if msg_len.usize() > _max_message_bytes() then
-        msg_buf.substring(0, actual_len.isize()) + "...[truncated]"
-      else
-        msg_buf.substring(0, actual_len.isize())
-      end
+      let msg: String val =
+        if msg_len.usize() > _max_message_bytes() then
+          msg_buf.substring(0, actual_len.isize()) + "...[truncated]"
+        else
+          msg_buf.substring(0, actual_len.isize())
+        end
 
       records.push(DiagRecord(state, native, msg))
       rec_num = rec_num + 1
     end
 
     if rec_num > _max_records() then
-      records.push(DiagRecord("00000", 0,
-        "diagnostic chain truncated at " + _max_records().string() + " records"))
+      let trunc_msg: String val =
+        recover val
+          "diagnostic chain truncated at "
+            + _max_records().string() + " records"
+        end
+      records.push(DiagRecord("00000", 0, trunc_msg))
     end
 
     consume records

@@ -3,7 +3,11 @@ primitive Odbc
   Entry point for ODBC connections.
   """
 
-  fun connect(dsn: Dsn, validate_utf8: Bool = true): (Connection | ConnectError) =>
+  fun connect(
+    dsn: Dsn,
+    validate_utf8: Bool = true)
+    : (Connection | ConnectError)
+  =>
     """
     Connect to an ODBC data source. Each Connection owns its own
     SQLHENV (no shared environment handle across connections).
@@ -12,15 +16,18 @@ primitive Odbc
 
     // Allocate environment handle
     var henv: Pointer[None] tag = Pointer[None]
-    var rc = @SQLAllocHandle(_ODBC.handle_env(), _ODBC.null_handle(),
-      addressof henv)
+    var rc =
+      @SQLAllocHandle(
+      _ODBC.handle_env(), _ODBC.null_handle(), addressof henv)
     if not _ODBC.ok(rc) then
-      return ConnectError(EnvAllocFailed,
-        recover val Array[DiagRecord] end)
+      return ConnectError(
+        EnvAllocFailed, recover val Array[DiagRecord] end)
     end
 
     // Set ODBC version
-    rc = @SQLSetEnvAttr(henv, _ODBC.attr_odbc_version(), _ODBC.ov_odbc3(), 0)
+    rc =
+      @SQLSetEnvAttr(
+      henv, _ODBC.attr_odbc_version(), _ODBC.ov_odbc3(), 0)
     if not _ODBC.ok(rc) then
       let diag = _DiagHelper.read(_ODBC.handle_env(), henv)
       @SQLFreeHandle(_ODBC.handle_env(), henv)
@@ -29,7 +36,9 @@ primitive Odbc
 
     // Allocate connection handle
     var hdbc: Pointer[None] tag = Pointer[None]
-    rc = @SQLAllocHandle(_ODBC.handle_dbc(), henv, addressof hdbc)
+    rc =
+      @SQLAllocHandle(
+      _ODBC.handle_dbc(), henv, addressof hdbc)
     if not _ODBC.ok(rc) then
       let diag = _DiagHelper.read(_ODBC.handle_env(), henv)
       @SQLFreeHandle(_ODBC.handle_env(), henv)
@@ -39,9 +48,15 @@ primitive Odbc
     // Connect
     let conn_str = dsn._string()
     var out_len: I16 = 0
-    rc = @SQLDriverConnect(hdbc, _ODBC.null_handle(),
-      conn_str.cpointer(), conn_str.size().i16(),
-      _ODBC.null_handle(), 0, addressof out_len,
+    rc =
+      @SQLDriverConnect(
+      hdbc,
+      _ODBC.null_handle(),
+      conn_str.cpointer(),
+      conn_str.size().i16(),
+      _ODBC.null_handle(),
+      0,
+      addressof out_len,
       _ODBC.driver_noprompt())
 
     if not _ODBC.ok(rc) then
@@ -52,14 +67,14 @@ primitive Odbc
     end
 
     // Collect any SQL_SUCCESS_WITH_INFO warnings
-    let warnings: (Warnings | None) = if _ODBC.has_info(rc) then
-      Warnings(_DiagHelper.read(_ODBC.handle_dbc(), hdbc))
-    else
-      None
-    end
+    let warnings: (Warnings | None) =
+      if _ODBC.has_info(rc) then
+        Warnings(_DiagHelper.read(_ODBC.handle_dbc(), hdbc))
+      else
+        None
+      end
 
     Connection._create(henv, hdbc, warnings, validate_utf8)
-
 
 class ref Connection
   """
@@ -75,9 +90,12 @@ class ref Connection
   var _last_warnings: (Warnings | None)
   let _validate_utf8: Bool
 
-  new ref _create(henv: Pointer[None] tag, hdbc: Pointer[None] tag,
+  new ref _create(
+    henv: Pointer[None] tag,
+    hdbc: Pointer[None] tag,
     warnings: (Warnings | None) = None,
-    validate_utf8: Bool = true) =>
+    validate_utf8: Bool = true)
+  =>
     _henv = henv
     _hdbc = hdbc
     _closed = false
@@ -86,39 +104,45 @@ class ref Connection
     _last_warnings = warnings
     _validate_utf8 = validate_utf8
 
-  // --- DDL/DML ---
-
   fun ref exec(sql: String val): (RowCount | ExecError) =>
     """
     Execute a non-parameterized statement via SQLExecDirect.
     Returns affected row count, or None for DDL.
     """
     if _closed then
-      return ExecError(ConnectionClosed,
-        recover val Array[DiagRecord] end, sql)
+      return ExecError(
+        ConnectionClosed, recover val Array[DiagRecord] end, sql)
     end
 
     // Allocate a temporary statement handle
     var hstmt: Pointer[None] tag = Pointer[None]
-    var rc = @SQLAllocHandle(_ODBC.handle_stmt(), _hdbc, addressof hstmt)
+    var rc =
+      @SQLAllocHandle(
+      _ODBC.handle_stmt(), _hdbc, addressof hstmt)
     if not _ODBC.ok(rc) then
       let diag = _DiagHelper.read(_ODBC.handle_dbc(), _hdbc)
-      return ExecError(ExecErrorClassifier.classify(diag), diag, sql)
+      return ExecError(
+        ExecErrorClassifier.classify(diag), diag, sql)
     end
 
-    rc = @SQLExecDirect(hstmt, sql.cpointer(), sql.size().i32())
+    rc =
+      @SQLExecDirect(
+      hstmt, sql.cpointer(), sql.size().i32())
 
     // Capture warnings before anything else
-    _last_warnings = if _ODBC.has_info(rc) then
-      Warnings(_DiagHelper.read(_ODBC.handle_stmt(), hstmt))
-    else
-      None
-    end
+    _last_warnings =
+      if _ODBC.has_info(rc) then
+        Warnings(
+          _DiagHelper.read(_ODBC.handle_stmt(), hstmt))
+      else
+        None
+      end
 
     if not _ODBC.ok(rc) then
       let diag = _DiagHelper.read(_ODBC.handle_stmt(), hstmt)
       @SQLFreeHandle(_ODBC.handle_stmt(), hstmt)
-      return ExecError(ExecErrorClassifier.classify(diag), diag, sql)
+      return ExecError(
+        ExecErrorClassifier.classify(diag), diag, sql)
     end
 
     // Get row count
@@ -143,31 +167,37 @@ class ref Connection
     | let _: ExecError => error
     end
 
-  // --- Prepared statements ---
-
   fun ref prepare(sql: String val): (Statement | PrepareError) =>
     """
     Prepare a statement for parameter binding and repeated execution.
     """
     if _closed then
-      return PrepareError(PrepareConnectionClosed,
-        recover val Array[DiagRecord] end, sql)
+      return PrepareError(
+        PrepareConnectionClosed,
+        recover val Array[DiagRecord] end,
+        sql)
     end
 
     var hstmt: Pointer[None] tag = Pointer[None]
-    var rc = @SQLAllocHandle(_ODBC.handle_stmt(), _hdbc, addressof hstmt)
+    var rc =
+      @SQLAllocHandle(
+      _ODBC.handle_stmt(), _hdbc, addressof hstmt)
     if not _ODBC.ok(rc) then
       let diag = _DiagHelper.read(_ODBC.handle_dbc(), _hdbc)
       return PrepareError(DriverPrepareError, diag, sql)
     end
 
-    rc = @SQLPrepare(hstmt, sql.cpointer(), sql.size().i32())
+    rc =
+      @SQLPrepare(
+      hstmt, sql.cpointer(), sql.size().i32())
 
-    _last_warnings = if _ODBC.has_info(rc) then
-      Warnings(_DiagHelper.read(_ODBC.handle_stmt(), hstmt))
-    else
-      None
-    end
+    _last_warnings =
+      if _ODBC.has_info(rc) then
+        Warnings(
+          _DiagHelper.read(_ODBC.handle_stmt(), hstmt))
+      else
+        None
+      end
 
     if not _ODBC.ok(rc) then
       let diag = _DiagHelper.read(_ODBC.handle_stmt(), hstmt)
@@ -179,7 +209,8 @@ class ref Connection
     var num_params: I16 = 0
     @SQLNumParams(hstmt, addressof num_params)
 
-    Statement._create(hstmt, num_params.u16(), _alive, _validate_utf8)
+    Statement._create(
+      hstmt, num_params.u16(), _alive, _validate_utf8)
 
   fun ref prepare_p(sql: String val): Statement ? =>
     """
@@ -190,36 +221,42 @@ class ref Connection
     | let _: PrepareError => error
     end
 
-  // --- Ad-hoc SELECT ---
-
   fun ref query(sql: String val): (Cursor | ExecError) =>
     """
     Execute a SELECT via SQLExecDirect and return a Cursor.
     """
     if _closed then
-      return ExecError(ConnectionClosed,
-        recover val Array[DiagRecord] end, sql)
+      return ExecError(
+        ConnectionClosed, recover val Array[DiagRecord] end, sql)
     end
 
     var hstmt: Pointer[None] tag = Pointer[None]
-    var rc = @SQLAllocHandle(_ODBC.handle_stmt(), _hdbc, addressof hstmt)
+    var rc =
+      @SQLAllocHandle(
+      _ODBC.handle_stmt(), _hdbc, addressof hstmt)
     if not _ODBC.ok(rc) then
       let diag = _DiagHelper.read(_ODBC.handle_dbc(), _hdbc)
-      return ExecError(ExecErrorClassifier.classify(diag), diag, sql)
+      return ExecError(
+        ExecErrorClassifier.classify(diag), diag, sql)
     end
 
-    rc = @SQLExecDirect(hstmt, sql.cpointer(), sql.size().i32())
+    rc =
+      @SQLExecDirect(
+      hstmt, sql.cpointer(), sql.size().i32())
 
-    _last_warnings = if _ODBC.has_info(rc) then
-      Warnings(_DiagHelper.read(_ODBC.handle_stmt(), hstmt))
-    else
-      None
-    end
+    _last_warnings =
+      if _ODBC.has_info(rc) then
+        Warnings(
+          _DiagHelper.read(_ODBC.handle_stmt(), hstmt))
+      else
+        None
+      end
 
     if not _ODBC.ok(rc) then
       let diag = _DiagHelper.read(_ODBC.handle_stmt(), hstmt)
       @SQLFreeHandle(_ODBC.handle_stmt(), hstmt)
-      return ExecError(ExecErrorClassifier.classify(diag), diag, sql)
+      return ExecError(
+        ExecErrorClassifier.classify(diag), diag, sql)
     end
 
     Cursor._create(hstmt, _alive, _validate_utf8)
@@ -233,8 +270,6 @@ class ref Connection
     | let _: ExecError => error
     end
 
-  // --- Transactions ---
-
   fun ref begin(): (None | TxBeginError) =>
     """
     Set autocommit off. Returns error if already in a transaction
@@ -247,19 +282,22 @@ class ref Connection
       return TxBeginError(AlreadyInTransaction)
     end
 
-    let rc = @SQLSetConnectAttr(_hdbc,
-      _ODBC.attr_autocommit(), _ODBC.autocommit_off(), 0)
+    let rc =
+      @SQLSetConnectAttr(
+      _hdbc, _ODBC.attr_autocommit(), _ODBC.autocommit_off(), 0)
 
     if not _ODBC.ok(rc) then
       let diag = _DiagHelper.read(_ODBC.handle_dbc(), _hdbc)
       return TxBeginError(DriverTxError, diag)
     end
 
-    _last_warnings = if _ODBC.has_info(rc) then
-      Warnings(_DiagHelper.read(_ODBC.handle_dbc(), _hdbc))
-    else
-      None
-    end
+    _last_warnings =
+      if _ODBC.has_info(rc) then
+        Warnings(
+          _DiagHelper.read(_ODBC.handle_dbc(), _hdbc))
+      else
+        None
+      end
 
     _in_tx = true
     None
@@ -275,27 +313,34 @@ class ref Connection
       return TxCommitError(NotInTransaction)
     end
 
-    let rc = @SQLEndTran(_ODBC.handle_dbc(), _hdbc, _ODBC.sql_commit())
+    let rc =
+      @SQLEndTran(
+      _ODBC.handle_dbc(), _hdbc, _ODBC.sql_commit())
 
     if not _ODBC.ok(rc) then
       let diag = _DiagHelper.read(_ODBC.handle_dbc(), _hdbc)
-      let verdict = try
-        let state = diag(0)?.sqlstate
-        if (state.size() >= 2) and
-          (try (state(0)? == '0') and (state(1)? == '8') else false end)
-        then
-          CommitAmbiguous
+      let verdict =
+        try
+          let state = diag(0)?.sqlstate
+          let is_08 =
+            try
+              (state(0)? == '0') and (state(1)? == '8')
+            else
+              false
+            end
+          if (state.size() >= 2) and is_08 then
+            CommitAmbiguous
+          else
+            CommitFailed
+          end
         else
           CommitFailed
         end
-      else
-        CommitFailed
-      end
 
       // Re-enable autocommit on CommitFailed (server rolled back)
       if verdict is CommitFailed then
-        @SQLSetConnectAttr(_hdbc,
-          _ODBC.attr_autocommit(), _ODBC.autocommit_on(), 0)
+        @SQLSetConnectAttr(
+          _hdbc, _ODBC.attr_autocommit(), _ODBC.autocommit_on(), 0)
         _in_tx = false
       end
 
@@ -303,15 +348,17 @@ class ref Connection
     end
 
     // Success — re-enable autocommit
-    @SQLSetConnectAttr(_hdbc,
-      _ODBC.attr_autocommit(), _ODBC.autocommit_on(), 0)
+    @SQLSetConnectAttr(
+      _hdbc, _ODBC.attr_autocommit(), _ODBC.autocommit_on(), 0)
     _in_tx = false
 
-    _last_warnings = if _ODBC.has_info(rc) then
-      Warnings(_DiagHelper.read(_ODBC.handle_dbc(), _hdbc))
-    else
-      None
-    end
+    _last_warnings =
+      if _ODBC.has_info(rc) then
+        Warnings(
+          _DiagHelper.read(_ODBC.handle_dbc(), _hdbc))
+      else
+        None
+      end
     None
 
   fun ref rollback(): (None | TxRollbackError) =>
@@ -325,23 +372,27 @@ class ref Connection
       return TxRollbackError(RollbackNotInTransaction)
     end
 
-    let rc = @SQLEndTran(_ODBC.handle_dbc(), _hdbc, _ODBC.sql_rollback())
+    let rc =
+      @SQLEndTran(
+      _ODBC.handle_dbc(), _hdbc, _ODBC.sql_rollback())
 
     // Always clear tx state
     _in_tx = false
-    @SQLSetConnectAttr(_hdbc,
-      _ODBC.attr_autocommit(), _ODBC.autocommit_on(), 0)
+    @SQLSetConnectAttr(
+      _hdbc, _ODBC.attr_autocommit(), _ODBC.autocommit_on(), 0)
 
     if not _ODBC.ok(rc) then
       let diag = _DiagHelper.read(_ODBC.handle_dbc(), _hdbc)
       return TxRollbackError(DriverRollbackError, diag)
     end
 
-    _last_warnings = if _ODBC.has_info(rc) then
-      Warnings(_DiagHelper.read(_ODBC.handle_dbc(), _hdbc))
-    else
-      None
-    end
+    _last_warnings =
+      if _ODBC.has_info(rc) then
+        Warnings(
+          _DiagHelper.read(_ODBC.handle_dbc(), _hdbc))
+      else
+        None
+      end
     None
 
   fun ref begin_p() ? =>
@@ -368,12 +419,8 @@ class ref Connection
     | let _: TxRollbackError => error
     end
 
-  // --- Observability ---
-
   fun ref last_warnings(): (Warnings | None) =>
     _last_warnings
-
-  // --- Lifecycle ---
 
   fun ref close() =>
     """
@@ -383,7 +430,8 @@ class ref Connection
     if _closed then return end
 
     if _in_tx then
-      @SQLEndTran(_ODBC.handle_dbc(), _hdbc, _ODBC.sql_rollback())
+      @SQLEndTran(
+        _ODBC.handle_dbc(), _hdbc, _ODBC.sql_rollback())
       _in_tx = false
     end
 
@@ -401,12 +449,9 @@ class ref Connection
     """
     if not _closed then
       if _in_tx then
-        @SQLEndTran(_ODBC.handle_dbc(), _hdbc, _ODBC.sql_rollback())
+        @SQLEndTran(
+          _ODBC.handle_dbc(), _hdbc, _ODBC.sql_rollback())
       end
-      // Can't call _alive.set_dead() here (_final is box context).
-      // Children holding _conn_alive will detect the freed handle via
-      // their own null-handle checks if they outlive the Connection,
-      // but ORCA's ref path ensures they finalize first.
       @SQLDisconnect(_hdbc)
       @SQLFreeHandle(_ODBC.handle_dbc(), _hdbc)
       @SQLFreeHandle(_ODBC.handle_env(), _henv)

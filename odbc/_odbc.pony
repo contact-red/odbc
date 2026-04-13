@@ -1,8 +1,6 @@
 // ODBC FFI declarations for unixODBC.
 // All pointer parameters use Pointer[None] tag — ODBC handles are opaque void*.
 
-use "lib:odbc"
-
 // Handle management
 use @SQLAllocHandle[I16](handle_type: I16, input_handle: Pointer[None] tag,
   output_handle_ptr: Pointer[None] tag)
@@ -68,7 +66,6 @@ use @SQLGetDiagRec[I16](handle_type: I16, handle: Pointer[None] tag,
   native_error: Pointer[None] tag,
   message_text: Pointer[None] tag, buffer_length: I16,
   text_length: Pointer[None] tag)
-
 
 primitive _ODBC
   """

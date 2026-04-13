@@ -12,7 +12,6 @@ class val _RowTestInput
     col = col'
     expected = expected'
 
-
 primitive _GenHelper
   fun random_sql_value(rnd: Randomness): SqlValue =>
     let which = rnd.usize(0, 4)
@@ -21,7 +20,8 @@ primitive _GenHelper
     | 1 => SqlFloat(rnd.f64())
     | 2 =>
       let len = rnd.usize(0, 20)
-      let s = recover val
+      let s =
+        recover val
         let buf = String(len)
         var i: USize = 0
         while i < len do
@@ -48,7 +48,6 @@ primitive _GenHelper
     let row = Row.create(consume cols)
     _RowTestInput(row, ColIndex((test_col + 1).u16()), expected)
 
-
 class iso _RowIntAccessorProperty is Property1[_RowTestInput]
   fun name(): String => "row.int() returns value for SqlInt, error for others"
 
@@ -69,7 +68,10 @@ class iso _RowIntAccessorProperty is Property1[_RowTestInput]
         else ph.fail("expected I64, got SqlNull")
         end
       | SqlNull =>
-        match result | SqlNull => None else ph.fail("expected SqlNull") end
+        match result
+        | SqlNull => None
+        else ph.fail("expected SqlNull")
+        end
       else
         ph.fail("int() should have raised error for non-int column")
       end
@@ -81,9 +83,9 @@ class iso _RowIntAccessorProperty is Property1[_RowTestInput]
       end
     end
 
-
 class iso _RowFloatAccessorProperty is Property1[_RowTestInput]
-  fun name(): String => "row.float() returns value for SqlFloat, error for others"
+  fun name(): String =>
+    "row.float() returns value for SqlFloat, error for others"
 
   fun gen(): Generator[_RowTestInput] =>
     Generator[_RowTestInput](
@@ -102,7 +104,10 @@ class iso _RowFloatAccessorProperty is Property1[_RowTestInput]
         else ph.fail("expected F64, got SqlNull")
         end
       | SqlNull =>
-        match result | SqlNull => None else ph.fail("expected SqlNull") end
+        match result
+        | SqlNull => None
+        else ph.fail("expected SqlNull")
+        end
       else ph.fail("float() should have raised error")
       end
     else
@@ -112,7 +117,6 @@ class iso _RowFloatAccessorProperty is Property1[_RowTestInput]
       else None
       end
     end
-
 
 class iso _RowTextAccessorProperty is Property1[_RowTestInput]
   fun name(): String => "row.text() returns value for SqlText, error for others"
@@ -134,7 +138,10 @@ class iso _RowTextAccessorProperty is Property1[_RowTestInput]
         else ph.fail("expected String, got SqlNull")
         end
       | SqlNull =>
-        match result | SqlNull => None else ph.fail("expected SqlNull") end
+        match result
+        | SqlNull => None
+        else ph.fail("expected SqlNull")
+        end
       else ph.fail("text() should have raised error")
       end
     else
@@ -144,7 +151,6 @@ class iso _RowTextAccessorProperty is Property1[_RowTestInput]
       else None
       end
     end
-
 
 class iso _RowBoolAccessorProperty is Property1[_RowTestInput]
   fun name(): String => "row.bool() returns value for SqlBool, error for others"
@@ -166,7 +172,10 @@ class iso _RowBoolAccessorProperty is Property1[_RowTestInput]
         else ph.fail("expected Bool, got SqlNull")
         end
       | SqlNull =>
-        match result | SqlNull => None else ph.fail("expected SqlNull") end
+        match result
+        | SqlNull => None
+        else ph.fail("expected SqlNull")
+        end
       else ph.fail("bool() should have raised error")
       end
     else
@@ -176,7 +185,6 @@ class iso _RowBoolAccessorProperty is Property1[_RowTestInput]
       else None
       end
     end
-
 
 class iso _RowNullProperty is Property1[USize]
   fun name(): String => "row.is_null() is true iff column is SqlNull"
@@ -198,14 +206,14 @@ class iso _RowNullProperty is Property1[USize]
     i = 0
     while i < num_cols do
       try
-        ph.assert_eq[Bool]((i % 2) == 0,
-          row.is_null(ColIndex((i + 1).u16()))?)
+        let expected_null = (i % 2) == 0
+        let actual_null = row.is_null(ColIndex((i + 1).u16()))?
+        ph.assert_eq[Bool](expected_null, actual_null)
       else
         ph.fail("is_null raised error for valid column " + (i + 1).string())
       end
       i = i + 1
     end
-
 
 class val _RowOutOfRangeInput
   let row: Row
@@ -214,7 +222,6 @@ class val _RowOutOfRangeInput
   new val create(row': Row, bad_col': ColIndex) =>
     row = row'
     bad_col = bad_col'
-
 
 class iso _RowOutOfRangeProperty is Property1[_RowOutOfRangeInput]
   fun name(): String => "row.column() raises error for out-of-range index"
@@ -229,9 +236,10 @@ class iso _RowOutOfRangeProperty is Property1[_RowOutOfRangeInput]
           while i < num_cols do cols.push(SqlInt(rnd.i64())); i = i + 1 end
           let row = Row.create(consume cols)
 
-          let bad: U16 = if rnd.bool() then 0
-          else (num_cols + 1 + rnd.usize(0, 10)).u16()
-          end
+          let bad: U16 =
+            if rnd.bool() then 0
+            else (num_cols + 1 + rnd.usize(0, 10)).u16()
+            end
           _RowOutOfRangeInput(row, ColIndex(bad))
       end)
 

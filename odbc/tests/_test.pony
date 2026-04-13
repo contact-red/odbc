@@ -1,3 +1,4 @@
+use "lib:odbc"
 use "pony_test"
 use "pony_check"
 use ".."
@@ -10,6 +11,9 @@ actor Main is TestList
     None
 
   fun tag tests(test: PonyTest) =>
+    """
+    Register all tests.
+    """
     // Pure Pony property tests (no driver needed)
     test(Property1UnitTest[_RowTestInput](_RowIntAccessorProperty))
     test(Property1UnitTest[_RowTestInput](_RowFloatAccessorProperty))

@@ -47,33 +47,40 @@ class ref _ColumnBindings
       var decimal_digits: I16 = 0
       var nullable: I16 = 0
 
-      @SQLDescribeCol(hstmt, col,
-        name_buf.cpointer(), 256, addressof name_len,
-        addressof data_type, addressof col_size,
-        addressof decimal_digits, addressof nullable)
+      @SQLDescribeCol(
+        hstmt,
+        col,
+        name_buf.cpointer(),
+        256,
+        addressof name_len,
+        addressof data_type,
+        addressof col_size,
+        addressof decimal_digits,
+        addressof nullable)
 
       _sql_types.push(data_type)
 
       let pos = (col - 1).usize()
 
       // Map SQL type to C type
-      let c_type: I16 = match data_type
-      | _ODBC.sql_bit() => _ODBC.c_bit()
-      | _ODBC.sql_smallint() => _ODBC.c_sbigint()
-      | _ODBC.sql_integer() => _ODBC.c_sbigint()
-      | _ODBC.sql_bigint() => _ODBC.c_sbigint()
-      | _ODBC.sql_real() => _ODBC.c_double()
-      | _ODBC.sql_float() => _ODBC.c_double()
-      | _ODBC.sql_double() => _ODBC.c_double()
-      | _ODBC.sql_char() => _ODBC.c_char()
-      | _ODBC.sql_varchar() => _ODBC.c_char()
-      | _ODBC.sql_longvarchar() => _ODBC.c_char()
-      | _ODBC.sql_type_date() => _ODBC.c_type_date()
-      | _ODBC.sql_type_time() => _ODBC.c_type_time()
-      | _ODBC.sql_type_timestamp() => _ODBC.c_type_timestamp()
-      | _ODBC.sql_numeric() => _ODBC.c_char()  // read as string
-      | _ODBC.sql_decimal() => _ODBC.c_char()  // read as string
-      else
+      let c_type: I16 =
+        match data_type
+        | _ODBC.sql_bit() => _ODBC.c_bit()
+        | _ODBC.sql_smallint() => _ODBC.c_sbigint()
+        | _ODBC.sql_integer() => _ODBC.c_sbigint()
+        | _ODBC.sql_bigint() => _ODBC.c_sbigint()
+        | _ODBC.sql_real() => _ODBC.c_double()
+        | _ODBC.sql_float() => _ODBC.c_double()
+        | _ODBC.sql_double() => _ODBC.c_double()
+        | _ODBC.sql_char() => _ODBC.c_char()
+        | _ODBC.sql_varchar() => _ODBC.c_char()
+        | _ODBC.sql_longvarchar() => _ODBC.c_char()
+        | _ODBC.sql_type_date() => _ODBC.c_type_date()
+        | _ODBC.sql_type_time() => _ODBC.c_type_time()
+        | _ODBC.sql_type_timestamp() => _ODBC.c_type_timestamp()
+        | _ODBC.sql_numeric() => _ODBC.c_char()
+        | _ODBC.sql_decimal() => _ODBC.c_char()
+        else
         // Unsupported type — don't bind, will produce FetchError
         _c_types.push(0)
         _fixed_bufs.push(Array[U8])
@@ -99,17 +106,25 @@ class ref _ColumnBindings
         _is_text.push(true)
 
         // Bind the text column
-        let rc = @SQLBindCol(hstmt, col, c_type,
-          tbuf.cpointer(), buf_size.i64(),
+        let rc =
+          @SQLBindCol(
+          hstmt,
+          col,
+          c_type,
+          tbuf.cpointer(),
+          buf_size.i64(),
           _indicators.cpointer(pos))
         if not _ODBC.ok(rc) then error end
       else
         // Fixed-width column
-        let fsize: USize = if c_type == _ODBC.c_bit() then 1
-        elseif c_type == _ODBC.c_type_date() then _ODBC.date_struct_size()
-        elseif c_type == _ODBC.c_type_time() then _ODBC.time_struct_size()
-        elseif c_type == _ODBC.c_type_timestamp() then _ODBC.timestamp_struct_size()
-        else 8 end // 8 covers I64 and F64
+        let fsize: USize =
+          if c_type == _ODBC.c_bit() then 1
+          elseif c_type == _ODBC.c_type_date() then _ODBC.date_struct_size()
+          elseif c_type == _ODBC.c_type_time() then _ODBC.time_struct_size()
+          elseif c_type == _ODBC.c_type_timestamp() then
+            _ODBC.timestamp_struct_size()
+          else 8 // 8 covers I64 and F64
+          end
         let fbuf = Array[U8].init(0, fsize)
 
         _fixed_bufs.push(fbuf)
@@ -117,8 +132,13 @@ class ref _ColumnBindings
         _is_text.push(false)
 
         // Bind the fixed column
-        let rc = @SQLBindCol(hstmt, col, c_type,
-          fbuf.cpointer(), fsize.i64(),
+        let rc =
+          @SQLBindCol(
+          hstmt,
+          col,
+          c_type,
+          fbuf.cpointer(),
+          fsize.i64(),
           _indicators.cpointer(pos))
         if not _ODBC.ok(rc) then error end
       end
@@ -192,7 +212,7 @@ class ref _ColumnBindings
             columns.push(SqlTime(hr, mi, se))
           elseif c_type == _ODBC.c_type_timestamp() then
             // TIMESTAMP_STRUCT: year(I16@0), month(U16@2), day(U16@4),
-            //   hour(U16@6), minute(U16@8), second(U16@10), fraction(U32@12)
+            // hour(U16@6), minute(U16@8), second(U16@10), fraction(U32@12)
             var yr: I16 = 0; var mo: U16 = 0; var dy: U16 = 0
             var hr: U16 = 0; var mi: U16 = 0; var se: U16 = 0
             var fr: U32 = 0
@@ -323,9 +343,10 @@ class ref _ColumnBindings
         if (cp == 0xFFFD) and (width != 3) then return false end
         if (cp == 0xFFFD) and (width == 3) then
           // Could be a real replacement character — check bytes
-          if (s(byte_i)? != 0xEF) or
-             (s(byte_i + 1)? != 0xBF) or
-             (s(byte_i + 2)? != 0xBD) then
+          if (s(byte_i)? != 0xEF)
+            or (s(byte_i + 1)? != 0xBF)
+            or (s(byte_i + 2)? != 0xBD)
+          then
             return false
           end
         end

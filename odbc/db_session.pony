@@ -37,8 +37,8 @@ actor DbSession
     | let conn: Connection =>
       promise(conn.exec(sql))
     | let e: ConnectError =>
-      promise(ExecError(ConnectionClosed,
-        recover val Array[DiagRecord] end, sql))
+      promise(ExecError(
+        ConnectionClosed, recover val Array[DiagRecord] end, sql))
     end
 
   be query(sql: String val,
@@ -59,8 +59,9 @@ actor DbSession
           | EndOfRows => break
           | let e: FetchError =>
             cursor.close()
-            promise(ExecError(ExecErrorClassifier.classify(e.unsafe_diag()),
-              e.unsafe_diag()))
+            let ediag = e.unsafe_diag()
+            promise(ExecError(
+              ExecErrorClassifier.classify(ediag), ediag))
             return
           end
         end
@@ -70,8 +71,8 @@ actor DbSession
         promise(e)
       end
     | let e: ConnectError =>
-      promise(ExecError(ConnectionClosed,
-        recover val Array[DiagRecord] end, sql))
+      promise(ExecError(
+        ConnectionClosed, recover val Array[DiagRecord] end, sql))
     end
 
   be begin(promise: Promise[(None | TxBeginError)]) =>

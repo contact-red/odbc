@@ -10,22 +10,21 @@ class ref Statement
   var _closed: Bool
   var _cursor_open: Bool
   var _last_warnings: (Warnings | None)
-
-  // Per-param state
   let _bound_flags: Array[Bool] ref
   let _param_bufs: Array[Array[U8]] ref
   let _param_inds: Array[I64] ref
-  // Track the C type per param so we can distinguish I64 from F64
   let _param_c_types: Array[I16] ref
-  var _params_bound_to_odbc: Bool  // true after first SQLBindParameter call
-  var _needs_rebind: Bool          // dirty flag for text slot growth
-
-  // Column bindings — created on first execute(), reused across fetches
+  var _params_bound_to_odbc: Bool
+  var _needs_rebind: Bool
   var _col_bindings: (_ColumnBindings | None)
   let _validate_utf8: Bool
 
-  new ref _create(hstmt: Pointer[None] tag, param_count: U16,
-    conn_alive: _AliveFlag ref, validate_utf8: Bool = true) =>
+  new ref _create(
+    hstmt: Pointer[None] tag,
+    param_count: U16,
+    conn_alive: _AliveFlag ref,
+    validate_utf8: Bool = true)
+  =>
     _hstmt = hstmt
     _param_count = param_count
     _conn_alive = conn_alive
@@ -50,16 +49,14 @@ class ref Statement
 
   fun ref _check_alive(): (None | ExecError) =>
     if _closed then
-      return ExecError(StatementClosed,
-        recover val Array[DiagRecord] end)
+      return ExecError(
+        StatementClosed, recover val Array[DiagRecord] end)
     end
     if not _conn_alive.is_alive() then
-      return ExecError(ConnectionClosed,
-        recover val Array[DiagRecord] end)
+      return ExecError(
+        ConnectionClosed, recover val Array[DiagRecord] end)
     end
     None
-
-  // --- Binding ---
 
   fun ref bind(i: ParamIndex, v: SqlValue): (None | BindError) =>
     """
@@ -138,8 +135,6 @@ class ref Statement
     | let _: BindError => error
     end
 
-  // --- Execution ---
-
   fun ref execute(): (None | ExecError) =>
     """
     Execute a prepared SELECT, opening a cursor.
@@ -148,8 +143,8 @@ class ref Statement
     | let e: ExecError => return e
     end
     if _cursor_open then
-      return ExecError(CursorAlreadyOpen,
-        recover val Array[DiagRecord] end)
+      return ExecError(
+        CursorAlreadyOpen, recover val Array[DiagRecord] end)
     end
 
     match _check_all_bound()
@@ -161,11 +156,12 @@ class ref Statement
     end
 
     let rc = @SQLExecute(_hstmt)
-    _last_warnings = if _ODBC.has_info(rc) then
-      Warnings(_DiagHelper.read(_ODBC.handle_stmt(), _hstmt))
-    else
-      None
-    end
+    _last_warnings =
+      if _ODBC.has_info(rc) then
+        Warnings(_DiagHelper.read(_ODBC.handle_stmt(), _hstmt))
+      else
+        None
+      end
 
     if not _ODBC.ok(rc) then
       let diag = _DiagHelper.read(_ODBC.handle_stmt(), _hstmt)
@@ -192,8 +188,8 @@ class ref Statement
     | let e: ExecError => return e
     end
     if _cursor_open then
-      return ExecError(CursorAlreadyOpen,
-        recover val Array[DiagRecord] end)
+      return ExecError(
+        CursorAlreadyOpen, recover val Array[DiagRecord] end)
     end
 
     match _check_all_bound()
@@ -205,11 +201,12 @@ class ref Statement
     end
 
     let rc = @SQLExecute(_hstmt)
-    _last_warnings = if _ODBC.has_info(rc) then
-      Warnings(_DiagHelper.read(_ODBC.handle_stmt(), _hstmt))
-    else
-      None
-    end
+    _last_warnings =
+      if _ODBC.has_info(rc) then
+        Warnings(_DiagHelper.read(_ODBC.handle_stmt(), _hstmt))
+      else
+        None
+      end
 
     if not _ODBC.ok(rc) then
       let diag = _DiagHelper.read(_ODBC.handle_stmt(), _hstmt)
@@ -230,7 +227,8 @@ class ref Statement
     while i < _param_count.usize() do
       try
         if not _bound_flags(i)? then
-          return ExecError(UnboundParams,
+          return ExecError(
+            UnboundParams,
             recover val Array[DiagRecord] end)
         end
       end
@@ -257,23 +255,32 @@ class ref Statement
         let c_type = _param_c_types(i)?
         let param_num = (i + 1).u16()
 
-        let sql_type: I16 = match c_type
-        | _ODBC.c_bit() => _ODBC.sql_bit()
-        | _ODBC.c_sbigint() => _ODBC.sql_bigint()
-        | _ODBC.c_double() => _ODBC.sql_double()
-        else _ODBC.sql_varchar() // c_char or null
-        end
+        let sql_type: I16 =
+          match c_type
+          | _ODBC.c_bit() => _ODBC.sql_bit()
+          | _ODBC.c_sbigint() => _ODBC.sql_bigint()
+          | _ODBC.c_double() => _ODBC.sql_double()
+          else _ODBC.sql_varchar()
+          end
 
-        let col_size: U64 = if c_type == _ODBC.c_char() then
-          if ind > 0 then ind.u64() else 1 end
-        else
-          0
-        end
+        let col_size: U64 =
+          if c_type == _ODBC.c_char() then
+            if ind > 0 then ind.u64() else 1 end
+          else
+            0
+          end
 
-        let rc = @SQLBindParameter(_hstmt, param_num,
-          _ODBC.sql_param_input(), c_type, sql_type,
-          col_size, 0,
-          buf.cpointer(), buf.size().i64(),
+        let rc =
+          @SQLBindParameter(
+          _hstmt,
+          param_num,
+          _ODBC.sql_param_input(),
+          c_type,
+          sql_type,
+          col_size,
+          0,
+          buf.cpointer(),
+          buf.size().i64(),
           _param_inds.cpointer(i))
 
         if not _ODBC.ok(rc) then
@@ -288,14 +295,14 @@ class ref Statement
     _needs_rebind = false
     None
 
-  // --- Fetching ---
-
   fun ref fetch(): (Row | EndOfRows | FetchError) =>
     """
     Fetch the next row. Row is a val snapshot.
     """
     if _closed then return FetchError(CursorClosed) end
-    if not _conn_alive.is_alive() then return FetchError(FetchConnectionClosed) end
+    if not _conn_alive.is_alive() then
+      return FetchError(FetchConnectionClosed)
+    end
     if not _cursor_open then return FetchError(CursorClosed) end
 
     let rc = @SQLFetch(_hstmt)
@@ -304,11 +311,12 @@ class ref Statement
       return EndOfRows
     end
 
-    _last_warnings = if _ODBC.has_info(rc) then
-      Warnings(_DiagHelper.read(_ODBC.handle_stmt(), _hstmt))
-    else
-      None
-    end
+    _last_warnings =
+      if _ODBC.has_info(rc) then
+        Warnings(_DiagHelper.read(_ODBC.handle_stmt(), _hstmt))
+      else
+        None
+      end
 
     if not _ODBC.ok(rc) then
       let diag = _DiagHelper.read(_ODBC.handle_stmt(), _hstmt)
@@ -344,7 +352,9 @@ class ref Statement
     the row container (SqlText/SqlDecimal values still allocate strings).
     """
     if _closed then return FetchError(CursorClosed) end
-    if not _conn_alive.is_alive() then return FetchError(FetchConnectionClosed) end
+    if not _conn_alive.is_alive() then
+      return FetchError(FetchConnectionClosed)
+    end
     if not _cursor_open then return FetchError(CursorClosed) end
 
     let rc = @SQLFetch(_hstmt)
@@ -353,11 +363,12 @@ class ref Statement
       return EndOfRows
     end
 
-    _last_warnings = if _ODBC.has_info(rc) then
-      Warnings(_DiagHelper.read(_ODBC.handle_stmt(), _hstmt))
-    else
-      None
-    end
+    _last_warnings =
+      if _ODBC.has_info(rc) then
+        Warnings(_DiagHelper.read(_ODBC.handle_stmt(), _hstmt))
+      else
+        None
+      end
 
     if not _ODBC.ok(rc) then
       let diag = _DiagHelper.read(_ODBC.handle_stmt(), _hstmt)
@@ -383,8 +394,6 @@ class ref Statement
     """
     CancelToken(_hstmt)
 
-  // --- Cursor management ---
-
   fun ref close_cursor() =>
     """
     Close cursor, keep statement for rebinding and re-execution.
@@ -397,12 +406,8 @@ class ref Statement
       _col_bindings = None
     end
 
-  // --- Observability ---
-
   fun ref last_warnings(): (Warnings | None) =>
     _last_warnings
-
-  // --- Lifecycle ---
 
   fun ref close() =>
     """
