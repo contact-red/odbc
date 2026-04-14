@@ -87,7 +87,22 @@ class ref Statement
         buf(0)? = if sv.value then 1 else 0 end
         _param_inds(pos)? = 1
         _param_c_types(pos)? = _ODBC.c_bit()
-      | let sv: SqlInt =>
+      | let sv: SqlTinyInt =>
+        var n = sv.value
+        @memcpy(buf.cpointer(), addressof n, 1)
+        _param_inds(pos)? = 0
+        _param_c_types(pos)? = _ODBC.c_stinyint()
+      | let sv: SqlSmallInt =>
+        var n = sv.value
+        @memcpy(buf.cpointer(), addressof n, 2)
+        _param_inds(pos)? = 0
+        _param_c_types(pos)? = _ODBC.c_sshort()
+      | let sv: SqlInteger =>
+        var n = sv.value
+        @memcpy(buf.cpointer(), addressof n, 4)
+        _param_inds(pos)? = 0
+        _param_c_types(pos)? = _ODBC.c_slong()
+      | let sv: SqlBigInt =>
         var n = sv.value
         @memcpy(buf.cpointer(), addressof n, 8)
         _param_inds(pos)? = 0
@@ -312,6 +327,9 @@ class ref Statement
         let sql_type: I16 =
           match c_type
           | _ODBC.c_bit() => _ODBC.sql_bit()
+          | _ODBC.c_stinyint() => _ODBC.sql_tinyint()
+          | _ODBC.c_sshort() => _ODBC.sql_smallint()
+          | _ODBC.c_slong() => _ODBC.sql_integer()
           | _ODBC.c_sbigint() => _ODBC.sql_bigint()
           | _ODBC.c_double() => _ODBC.sql_double()
           | _ODBC.c_type_date() => _ODBC.sql_type_date()

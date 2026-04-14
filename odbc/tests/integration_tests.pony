@@ -187,7 +187,7 @@ class iso _PreparedStatementTest is UnitTest
       match \exhaustive\ conn.prepare("INSERT INTO _test_prep VALUES (?, ?)")
       | let stmt: Statement =>
         // First insert
-        match stmt.bind(ParamIndex(1), SqlInt(1))
+        match stmt.bind(ParamIndex(1), SqlInteger(1))
         | let e: BindError => h.fail("bind1: " + e.string())
         end
         match stmt.bind(ParamIndex(2), SqlText("alice"))
@@ -200,7 +200,7 @@ class iso _PreparedStatementTest is UnitTest
         end
 
         // Second insert — rebind, reuse
-        match stmt.bind(ParamIndex(1), SqlInt(2))
+        match stmt.bind(ParamIndex(1), SqlInteger(2))
         | let e: BindError => h.fail("rebind1: " + e.string())
         end
         match stmt.bind(ParamIndex(2), SqlText("bob"))
@@ -264,7 +264,7 @@ class iso _StatementReuseTest is UnitTest
         conn.prepare("SELECT val FROM _test_reuse WHERE id = ?")
       | let stmt: Statement =>
         // First query: id=1
-        match stmt.bind(ParamIndex(1), SqlInt(1))
+        match stmt.bind(ParamIndex(1), SqlInteger(1))
         | let e: BindError => h.fail("bind: " + e.string())
         end
         match stmt.execute()
@@ -281,7 +281,7 @@ class iso _StatementReuseTest is UnitTest
         stmt.close_cursor()
 
         // Second query: id=2 — reuse statement
-        match stmt.bind(ParamIndex(1), SqlInt(2))
+        match stmt.bind(ParamIndex(1), SqlInteger(2))
         | let e: BindError => h.fail("rebind: " + e.string())
         end
         match stmt.execute()
@@ -509,7 +509,7 @@ class iso _StatementValuesTest is UnitTest
       match \exhaustive\
         conn.prepare("SELECT id FROM _test_siter WHERE id > ? ORDER BY id")
       | let stmt: Statement =>
-        match stmt.bind(ParamIndex(1), SqlInt(5))
+        match stmt.bind(ParamIndex(1), SqlInteger(5))
         | let e: BindError => h.fail("bind: " + e.string())
         end
         match stmt.execute()
@@ -733,11 +733,11 @@ class iso _PartialFunctionTest is UnitTest
           conn.prepare_p(
             "INSERT INTO _test_pf VALUES (?, ?)")?
         stmt
-          .> bind_p(ParamIndex(1), SqlInt(3))?
+          .> bind_p(ParamIndex(1), SqlInteger(3))?
           .> bind_p(ParamIndex(2), SqlText("carol"))?
           .> execute_update_p()?
 
-        stmt.bind_p(ParamIndex(1), SqlInt(4))?
+        stmt.bind_p(ParamIndex(1), SqlInteger(4))?
         stmt.bind_p(ParamIndex(2), SqlText("dave"))?
         stmt.execute_update_p()?
         stmt.close()
@@ -930,7 +930,7 @@ class iso _LargeTextRoundtripTest is UnitTest
               end
               s
             end
-          match stmt.bind(ParamIndex(1), SqlInt(sz.i64()))
+          match stmt.bind(ParamIndex(1), SqlInteger(sz.i32()))
           | let e: BindError => h.fail("bind sz: " + e.string())
           end
           match stmt.bind(ParamIndex(2), SqlText(text))

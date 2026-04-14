@@ -20,11 +20,15 @@ class val Row
 
   fun int(i: ColIndex): (I64 | SqlNull) ? =>
     """
-    Read column as I64. Raises error on type mismatch or out of range.
+    Read column as I64. Accepts any integer type, widening to I64.
+    Raises error on type mismatch or out of range.
     """
     match column(i)?
     | SqlNull => SqlNull
-    | let v: SqlInt => v.value
+    | let v: SqlTinyInt => v.value.i64()
+    | let v: SqlSmallInt => v.value.i64()
+    | let v: SqlInteger => v.value.i64()
+    | let v: SqlBigInt => v.value
     else error
     end
 
@@ -52,15 +56,18 @@ class val Row
     """
     Read column as Bool. Raises error on type mismatch or out of range.
 
-    Accepts SqlBool, SqlInt (0=false, nonzero=true), and SqlText
-    ("1"/"0"/"t"/"f"/"true"/"false") to handle drivers that report
-    boolean columns as SMALLINT or CHAR (e.g., psqlODBC with
+    Accepts SqlBool, any integer type (0=false, nonzero=true), and
+    SqlText ("1"/"0"/"t"/"f"/"true"/"false") to handle drivers that
+    report boolean columns as SMALLINT or CHAR (e.g., psqlODBC with
     BoolsAsChar=Yes).
     """
     match column(i)?
     | SqlNull => SqlNull
     | let v: SqlBool => v.value
-    | let v: SqlInt => v.value != 0
+    | let v: SqlTinyInt => v.value != 0
+    | let v: SqlSmallInt => v.value != 0
+    | let v: SqlInteger => v.value != 0
+    | let v: SqlBigInt => v.value != 0
     | let v: SqlText =>
       match v.value.lower()
       | "1" | "t" | "true" => true

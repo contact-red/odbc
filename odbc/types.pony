@@ -84,7 +84,9 @@ primitive EndOfRows
   """
 
 type SqlValue is
-  ( SqlNull | SqlBool | SqlInt | SqlFloat | SqlText
+  ( SqlNull | SqlBool
+  | SqlTinyInt | SqlSmallInt | SqlInteger | SqlBigInt
+  | SqlFloat | SqlText
   | SqlDate | SqlTime | SqlTimestamp | SqlDecimal )
   """
   Union of all supported SQL value types.
@@ -108,10 +110,45 @@ class val SqlBool
   fun string(): String iso^ =>
     value.string()
 
-class val SqlInt
+class val SqlTinyInt
   """
-  Wraps I64. All integer column types (SMALLINT, INTEGER, BIGINT) are
-  read via SQL_C_SBIGINT and surfaced as I64. Platform-portable.
+  SQL TINYINT. Wraps I8.
+  """
+  let value: I8
+
+  new val create(v: I8) =>
+    value = v
+
+  fun string(): String iso^ =>
+    value.string()
+
+class val SqlSmallInt
+  """
+  SQL SMALLINT. Wraps I16.
+  """
+  let value: I16
+
+  new val create(v: I16) =>
+    value = v
+
+  fun string(): String iso^ =>
+    value.string()
+
+class val SqlInteger
+  """
+  SQL INTEGER. Wraps I32.
+  """
+  let value: I32
+
+  new val create(v: I32) =>
+    value = v
+
+  fun string(): String iso^ =>
+    value.string()
+
+class val SqlBigInt
+  """
+  SQL BIGINT. Wraps I64.
   """
   let value: I64
 

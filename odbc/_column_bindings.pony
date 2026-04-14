@@ -67,8 +67,9 @@ class ref _ColumnBindings
       let c_type: I16 =
         match data_type
         | _ODBC.sql_bit() => _ODBC.c_bit()
-        | _ODBC.sql_smallint() => _ODBC.c_sbigint()
-        | _ODBC.sql_integer() => _ODBC.c_sbigint()
+        | _ODBC.sql_tinyint() => _ODBC.c_stinyint()
+        | _ODBC.sql_smallint() => _ODBC.c_sshort()
+        | _ODBC.sql_integer() => _ODBC.c_slong()
         | _ODBC.sql_bigint() => _ODBC.c_sbigint()
         | _ODBC.sql_real() => _ODBC.c_double()
         | _ODBC.sql_float() => _ODBC.c_double()
@@ -126,6 +127,9 @@ class ref _ColumnBindings
           elseif c_type == _ODBC.c_type_time() then _ODBC.time_struct_size()
           elseif c_type == _ODBC.c_type_timestamp() then
             _ODBC.timestamp_struct_size()
+          elseif c_type == _ODBC.c_stinyint() then 1
+          elseif c_type == _ODBC.c_sshort() then 2
+          elseif c_type == _ODBC.c_slong() then 4
           else 8 // 8 covers I64 and F64
           end
         let fbuf = Array[U8].init(0, fsize)
@@ -231,10 +235,22 @@ class ref _ColumnBindings
         let fbuf = _fixed_bufs(i)?
         let c_type = _c_types(i)?
 
-        if c_type == _ODBC.c_sbigint() then
+        if c_type == _ODBC.c_stinyint() then
+          var value: I8 = 0
+          @memcpy(addressof value, fbuf.cpointer(), 1)
+          return SqlTinyInt(value)
+        elseif c_type == _ODBC.c_sshort() then
+          var value: I16 = 0
+          @memcpy(addressof value, fbuf.cpointer(), 2)
+          return SqlSmallInt(value)
+        elseif c_type == _ODBC.c_slong() then
+          var value: I32 = 0
+          @memcpy(addressof value, fbuf.cpointer(), 4)
+          return SqlInteger(value)
+        elseif c_type == _ODBC.c_sbigint() then
           var value: I64 = 0
           @memcpy(addressof value, fbuf.cpointer(), 8)
-          return SqlInt(value)
+          return SqlBigInt(value)
         elseif c_type == _ODBC.c_double() then
           var value: F64 = 0
           @memcpy(addressof value, fbuf.cpointer(), 8)

@@ -102,6 +102,9 @@ primitive _ODBC
 
   // C data types
   fun c_char(): I16 => 1
+  fun c_stinyint(): I16 => -26
+  fun c_sshort(): I16 => -15
+  fun c_slong(): I16 => -16
   fun c_sbigint(): I16 => -25
   fun c_double(): I16 => 8
   fun c_bit(): I16 => -7
@@ -113,6 +116,7 @@ primitive _ODBC
   fun sql_char(): I16 => 1
   fun sql_varchar(): I16 => 12
   fun sql_longvarchar(): I16 => -1
+  fun sql_tinyint(): I16 => -6
   fun sql_smallint(): I16 => 5
   fun sql_integer(): I16 => 4
   fun sql_bigint(): I16 => -5

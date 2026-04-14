@@ -183,7 +183,25 @@ class iso _SqlValueRoundtripProperty is Property1[_SqlValueInput]
         | let r: Bool => ph.assert_eq[Bool](v.value, r)
         else ph.fail("bool returned SqlNull") end
       else ph.fail("bool raised error") end
-    | let v: SqlInt =>
+    | let v: SqlTinyInt =>
+      try
+        match row.int(ci)?
+        | let r: I64 => ph.assert_eq[I64](v.value.i64(), r)
+        else ph.fail("int returned SqlNull") end
+      else ph.fail("int raised error") end
+    | let v: SqlSmallInt =>
+      try
+        match row.int(ci)?
+        | let r: I64 => ph.assert_eq[I64](v.value.i64(), r)
+        else ph.fail("int returned SqlNull") end
+      else ph.fail("int raised error") end
+    | let v: SqlInteger =>
+      try
+        match row.int(ci)?
+        | let r: I64 => ph.assert_eq[I64](v.value.i64(), r)
+        else ph.fail("int returned SqlNull") end
+      else ph.fail("int raised error") end
+    | let v: SqlBigInt =>
       try
         match row.int(ci)?
         | let r: I64 => ph.assert_eq[I64](v.value, r)

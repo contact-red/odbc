@@ -14,11 +14,14 @@ class val _RowTestInput
 
 primitive _GenHelper
   fun random_sql_value(rnd: Randomness): SqlValue =>
-    let which = rnd.usize(0, 8)
+    let which = rnd.usize(0, 11)
     match which
-    | 0 => SqlInt(rnd.i64())
-    | 1 => SqlFloat(rnd.f64())
-    | 2 =>
+    | 0 => SqlTinyInt(rnd.i8())
+    | 1 => SqlSmallInt(rnd.i16())
+    | 2 => SqlInteger(rnd.i32())
+    | 3 => SqlBigInt(rnd.i64())
+    | 4 => SqlFloat(rnd.f64())
+    | 5 =>
       let len = rnd.usize(0, 20)
       let s =
         recover val
@@ -31,12 +34,12 @@ primitive _GenHelper
         buf
       end
       SqlText(s)
-    | 3 => SqlBool(rnd.bool())
-    | 4 =>
+    | 6 => SqlBool(rnd.bool())
+    | 7 =>
       SqlDate(rnd.i16(-9999, 9999), rnd.u16(1, 12), rnd.u16(1, 28))
-    | 5 =>
+    | 8 =>
       SqlTime(rnd.u16(0, 23), rnd.u16(0, 59), rnd.u16(0, 59))
-    | 6 =>
+    | 9 =>
       SqlTimestamp(
         rnd.i16(-9999, 9999),
         rnd.u16(1, 12),
@@ -45,7 +48,7 @@ primitive _GenHelper
         rnd.u16(0, 59),
         rnd.u16(0, 59),
         rnd.u32(0, 999_999_999))
-    | 7 =>
+    | 10 =>
       let len = rnd.usize(1, 15)
       let s =
         recover val
@@ -78,7 +81,8 @@ primitive _GenHelper
     _RowTestInput(row, ColIndex((test_col + 1).u16()), expected)
 
 class iso _RowIntAccessorProperty is Property1[_RowTestInput]
-  fun name(): String => "row.int() returns value for SqlInt, error for others"
+  fun name(): String =>
+    "row.int() returns value for integer types, error for others"
 
   fun gen(): Generator[_RowTestInput] =>
     Generator[_RowTestInput](
@@ -91,7 +95,22 @@ class iso _RowIntAccessorProperty is Property1[_RowTestInput]
     try
       let result = input.row.int(input.col)?
       match input.expected
-      | let v: SqlInt =>
+      | let v: SqlTinyInt =>
+        match result
+        | let r: I64 => ph.assert_eq[I64](v.value.i64(), r)
+        else ph.fail("expected I64, got SqlNull")
+        end
+      | let v: SqlSmallInt =>
+        match result
+        | let r: I64 => ph.assert_eq[I64](v.value.i64(), r)
+        else ph.fail("expected I64, got SqlNull")
+        end
+      | let v: SqlInteger =>
+        match result
+        | let r: I64 => ph.assert_eq[I64](v.value.i64(), r)
+        else ph.fail("expected I64, got SqlNull")
+        end
+      | let v: SqlBigInt =>
         match result
         | let r: I64 => ph.assert_eq[I64](v.value, r)
         else ph.fail("expected I64, got SqlNull")
@@ -106,7 +125,10 @@ class iso _RowIntAccessorProperty is Property1[_RowTestInput]
       end
     else
       match input.expected
-      | let _: SqlInt => ph.fail("int() raised error on SqlInt column")
+      | let _: SqlTinyInt => ph.fail("int() raised error on SqlTinyInt")
+      | let _: SqlSmallInt => ph.fail("int() raised error on SqlSmallInt")
+      | let _: SqlInteger => ph.fail("int() raised error on SqlInteger")
+      | let _: SqlBigInt => ph.fail("int() raised error on SqlBigInt")
       | SqlNull => ph.fail("int() raised error on SqlNull column")
       else None
       end
@@ -200,11 +222,25 @@ class iso _RowBoolAccessorProperty is Property1[_RowTestInput]
         | let r: Bool => ph.assert_eq[Bool](v.value, r)
         else ph.fail("expected Bool, got SqlNull")
         end
-      | let v: SqlInt =>
-        // bool() now accepts SqlInt (0=false, nonzero=true)
+      | let v: SqlTinyInt =>
         match result
         | let r: Bool => ph.assert_eq[Bool](v.value != 0, r)
-        else ph.fail("expected Bool from SqlInt, got SqlNull")
+        else ph.fail("expected Bool from SqlTinyInt, got SqlNull")
+        end
+      | let v: SqlSmallInt =>
+        match result
+        | let r: Bool => ph.assert_eq[Bool](v.value != 0, r)
+        else ph.fail("expected Bool from SqlSmallInt, got SqlNull")
+        end
+      | let v: SqlInteger =>
+        match result
+        | let r: Bool => ph.assert_eq[Bool](v.value != 0, r)
+        else ph.fail("expected Bool from SqlInteger, got SqlNull")
+        end
+      | let v: SqlBigInt =>
+        match result
+        | let r: Bool => ph.assert_eq[Bool](v.value != 0, r)
+        else ph.fail("expected Bool from SqlBigInt, got SqlNull")
         end
       | let v: SqlText =>
         // bool() now accepts SqlText for boolean-like strings
@@ -232,7 +268,10 @@ class iso _RowBoolAccessorProperty is Property1[_RowTestInput]
     else
       match input.expected
       | let _: SqlBool => ph.fail("bool() raised error on SqlBool")
-      | let _: SqlInt => ph.fail("bool() raised error on SqlInt")
+      | let _: SqlTinyInt => ph.fail("bool() raised error on SqlTinyInt")
+      | let _: SqlSmallInt => ph.fail("bool() raised error on SqlSmallInt")
+      | let _: SqlInteger => ph.fail("bool() raised error on SqlInteger")
+      | let _: SqlBigInt => ph.fail("bool() raised error on SqlBigInt")
       | let v: SqlText =>
         // Error is expected for non-boolean text values
         match v.value.lower()
@@ -256,7 +295,7 @@ class iso _RowNullProperty is Property1[USize]
     var i: USize = 0
     while i < num_cols do
       if (i % 2) == 0 then cols.push(SqlNull)
-      else cols.push(SqlInt(42))
+      else cols.push(SqlInteger(42))
       end
       i = i + 1
     end
@@ -292,7 +331,7 @@ class iso _RowOutOfRangeProperty is Property1[_RowOutOfRangeInput]
           let num_cols = rnd.usize(1, 5)
           let cols = recover iso Array[SqlValue](num_cols) end
           var i: USize = 0
-          while i < num_cols do cols.push(SqlInt(rnd.i64())); i = i + 1 end
+          while i < num_cols do cols.push(SqlBigInt(rnd.i64())); i = i + 1 end
           let row = Row.create(consume cols)
 
           let bad: U16 =
