@@ -605,6 +605,11 @@ class iso _DecimalTypesTest is UnitTest
   fun name(): String => "integration: decimal/numeric types"
 
   fun apply(h: TestHelper) =>
+    let profile = _TestDriver(h)
+    if not profile.has_decimal then
+      h.log("skipped: " + profile.name + " lacks decimal support")
+      return
+    end
     try
       let conn = _TestSetup.connect(h)?
       _TestSetup.exec(conn, "DROP TABLE IF EXISTS _test_dec", h)
@@ -786,17 +791,27 @@ class iso _BindDateTimeDecimalTest is UnitTest
   fun name(): String => "integration: bind date/time/timestamp/decimal params"
 
   fun apply(h: TestHelper) =>
+    let profile = _TestDriver(h)
     try
       let conn = _TestSetup.connect(h)?
       _TestSetup.exec(conn, "DROP TABLE IF EXISTS _test_bind_dt", h)
       let bind_ct =
-        "CREATE TABLE _test_bind_dt"
-          + " (d DATE, t TIME, ts TIMESTAMP, dec NUMERIC(10,2))"
+        if profile.has_decimal then
+          "CREATE TABLE _test_bind_dt"
+            + " (d DATE, t TIME, ts TIMESTAMP, dv NUMERIC(10,2))"
+        else
+          "CREATE TABLE _test_bind_dt"
+            + " (d DATE, t TIME, ts TIMESTAMP)"
+        end
       _TestSetup.exec(conn, bind_ct, h)
 
-      match \exhaustive\
-        conn.prepare(
-          "INSERT INTO _test_bind_dt VALUES (?, ?, ?, ?)")
+      let ins_sql =
+        if profile.has_decimal then
+          "INSERT INTO _test_bind_dt VALUES (?, ?, ?, ?)"
+        else
+          "INSERT INTO _test_bind_dt VALUES (?, ?, ?)"
+        end
+      match \exhaustive\ conn.prepare(ins_sql)
       | let stmt: Statement =>
         match stmt.bind(ParamIndex(1), SqlDate(2025, 6, 15))
         | let e: BindError => h.fail("bind date: " + e.string())
@@ -808,8 +823,10 @@ class iso _BindDateTimeDecimalTest is UnitTest
         match stmt.bind(ParamIndex(3), ts)
         | let e: BindError => h.fail("bind timestamp: " + e.string())
         end
-        match stmt.bind(ParamIndex(4), SqlDecimal("123.45"))
-        | let e: BindError => h.fail("bind decimal: " + e.string())
+        if profile.has_decimal then
+          match stmt.bind(ParamIndex(4), SqlDecimal("123.45"))
+          | let e: BindError => h.fail("bind decimal: " + e.string())
+          end
         end
         match \exhaustive\ stmt.execute_update()
         | let n: USize => h.assert_eq[USize](1, n)
@@ -821,8 +838,13 @@ class iso _BindDateTimeDecimalTest is UnitTest
       end
 
       // Read back and verify
-      match \exhaustive\
-        conn.query("SELECT d, t, ts, dec FROM _test_bind_dt")
+      let sel_sql =
+        if profile.has_decimal then
+          "SELECT d, t, ts, dv FROM _test_bind_dt"
+        else
+          "SELECT d, t, ts FROM _test_bind_dt"
+        end
+      match \exhaustive\ conn.query(sel_sql)
       | let cursor: Cursor =>
         match \exhaustive\ cursor.fetch()
         | let row: Row =>
@@ -854,12 +876,14 @@ class iso _BindDateTimeDecimalTest is UnitTest
             | SqlNull => h.fail("timestamp was null")
             end
 
-            match \exhaustive\ row.decimal(ColIndex(4))?
-            | let d: SqlDecimal =>
-              h.assert_true(
-                d.value.contains("123.45"),
-                "expected 123.45 in: " + d.value)
-            | SqlNull => h.fail("decimal was null")
+            if profile.has_decimal then
+              match \exhaustive\ row.decimal(ColIndex(4))?
+              | let d: SqlDecimal =>
+                h.assert_true(
+                  d.value.contains("123.45"),
+                  "expected 123.45 in: " + d.value)
+              | SqlNull => h.fail("decimal was null")
+              end
             end
           else
             h.fail("column read error")
@@ -887,11 +911,8 @@ class iso _LargeTextRoundtripTest is UnitTest
 
       // Test sizes: below 4096 floor, at boundary, and well above.
       // SQLGetData fallback handles sizes exceeding the bound buffer.
-      let sizes: Array[USize] val =
-        [ as USize:
-          100; 2000; 4000; 4095; 4096; 5000; 8000; 10240
-          20000; 100000
-        ]
+      let profile = _TestDriver(h)
+      let sizes = profile.large_text_sizes
 
       // Insert rows with strings of each size
       match \exhaustive\
@@ -1045,9 +1066,11 @@ class iso _TextTruncationDetectionTest is UnitTest
       // through a subquery that casts to VARCHAR(10) to force a small
       // col_size report. This is driver-dependent; if the driver reports
       // a large col_size anyway, the string will just roundtrip normally.
+      let profile = _TestDriver(h)
       _TestSetup.exec(conn, "DROP TABLE IF EXISTS _test_trunc2", h)
       _TestSetup.exec(
-        conn, "CREATE TABLE _test_trunc2 (t TEXT)", h)
+        conn, "CREATE TABLE _test_trunc2 (t " + profile.huge_text_col_type
+          + ")", h)
 
       // Insert a 5000-byte string
       let large =

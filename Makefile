@@ -34,7 +34,9 @@ EXAMPLES_BINARIES := $(addprefix $(BUILD_DIR)/,$(EXAMPLES))
 test: unit-tests examples
 
 unit-tests: $(tests_binary)
-	$^ --sequential
+	ODBC_TEST_DSN=psqlred ODBC_TEST_DRIVER=postgres $^ --sequential
+	ODBC_TEST_DSN=mariadb ODBC_TEST_DRIVER=mariadb $^ --sequential
+	ODBC_TEST_DSN=sqlitedb3 ODBC_TEST_DRIVER=sqlite $^ --sequential
 
 test-one: $(tests_binary)
 	$^ --only="$(t)"
