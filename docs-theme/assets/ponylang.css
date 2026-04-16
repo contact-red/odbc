@@ -1,0 +1,291 @@
+/* equestuia docs — contact.red terminal theme
+ *
+ * Overrides the Material for MkDocs defaults to match
+ * the dark terminal aesthetic of contact.red.
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&family=DM+Serif+Display:ital@0;1&display=swap');
+
+:root {
+  --cr-bg:          #0d0d0d;
+  --cr-bg-raised:   #111111;
+  --cr-bg-inset:    #0f0f0e;
+  --cr-border:      #1e1e1e;
+  --cr-border-sub:  #161614;
+  --cr-green:       #00ff88;
+  --cr-green-dim:   #00cc66;
+  --cr-green-dark:  #1a4a2a;
+  --cr-green-muted: #2a6644;
+  --cr-text:        #c8c8c0;
+  --cr-text-mid:    #a0a098;
+  --cr-text-dim:    #6a6a60;
+  --cr-text-mute:   #4a4a42;
+  --cr-text-dead:   #333333;
+  --cr-accent:      #cc4400;
+  --cr-font-mono:   'Space Mono', 'Courier New', monospace;
+  --cr-font-serif:  'DM Serif Display', Georgia, serif;
+}
+
+/* ── color scheme ── */
+
+[data-md-color-scheme="ponylang"] {
+  --md-default-bg-color:               var(--cr-bg);
+  --md-default-fg-color:               var(--cr-text);
+  --md-default-fg-color--light:        var(--cr-text-mid);
+  --md-default-fg-color--lighter:      var(--cr-text-dim);
+  --md-default-fg-color--lightest:     var(--cr-text-mute);
+
+  --md-primary-fg-color:               var(--cr-bg-raised);
+  --md-primary-bg-color:               var(--cr-green);
+  --md-primary-fg-color--light:        var(--cr-border);
+  --md-primary-fg-color--dark:         var(--cr-bg);
+
+  --md-accent-fg-color:                var(--cr-green);
+  --md-accent-fg-color--transparent:   rgba(0, 255, 136, 0.1);
+  --md-accent-bg-color:                var(--cr-bg);
+
+  --md-typeset-color:                  var(--cr-text);
+  --md-typeset-a-color:                var(--cr-green-dim);
+
+  --md-code-bg-color:                  var(--cr-bg-raised);
+  --md-code-fg-color:                  var(--cr-text);
+  --md-code-hl-color:                  rgba(0, 255, 136, 0.1);
+  --md-code-hl-number-color:           #00cc66;
+  --md-code-hl-string-color:           #cc4400;
+  --md-code-hl-keyword-color:          #00ff88;
+  --md-code-hl-comment-color:          var(--cr-text-dim);
+  --md-code-hl-function-color:         #c8c8c0;
+  --md-code-hl-constant-color:         #00cc66;
+  --md-code-hl-special-color:          #cc4400;
+  --md-code-hl-operator-color:         var(--cr-text-mid);
+  --md-code-hl-punctuation-color:      var(--cr-text-dim);
+  --md-code-hl-generic-color:          var(--cr-text);
+  --md-code-hl-variable-color:         var(--cr-text);
+  --md-code-hl-name-color:             var(--cr-text);
+
+  --md-footer-bg-color:                var(--cr-bg-raised);
+  --md-footer-bg-color--dark:          var(--cr-bg);
+  --md-footer-fg-color:                var(--cr-text-dim);
+  --md-footer-fg-color--light:         var(--cr-text-mute);
+  --md-footer-fg-color--lighter:       var(--cr-text-dead);
+
+  --md-shadow-z1: 0 0 0 transparent;
+  --md-shadow-z2: 0 0 0 transparent;
+  --md-shadow-z3: 0 0 0 transparent;
+
+  color-scheme: dark;
+}
+
+/* ── typography ── */
+
+[data-md-color-scheme="ponylang"] .md-typeset {
+  font-family: var(--cr-font-mono);
+  font-size: 0.82rem;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+}
+
+[data-md-color-scheme="ponylang"] .md-typeset h1,
+[data-md-color-scheme="ponylang"] .md-typeset h2,
+[data-md-color-scheme="ponylang"] .md-typeset h3,
+[data-md-color-scheme="ponylang"] .md-typeset h4,
+[data-md-color-scheme="ponylang"] .md-typeset h5,
+[data-md-color-scheme="ponylang"] .md-typeset h6 {
+  font-family: var(--cr-font-serif);
+  color: #f0f0e8;
+  font-weight: 400;
+}
+
+[data-md-color-scheme="ponylang"] .md-typeset h1 {
+  font-size: 1.6em;
+}
+
+[data-md-color-scheme="ponylang"] .md-typeset code,
+[data-md-color-scheme="ponylang"] .md-typeset pre,
+[data-md-color-scheme="ponylang"] .md-typeset kbd {
+  font-family: var(--cr-font-mono);
+}
+
+[data-md-color-scheme="ponylang"] .md-typeset code {
+  border: 1px solid var(--cr-border);
+  color: var(--cr-green-dim);
+}
+
+[data-md-color-scheme="ponylang"] .md-typeset pre {
+  border: 1px solid var(--cr-border);
+}
+
+[data-md-color-scheme="ponylang"] .md-typeset pre code {
+  border: none;
+  color: var(--cr-text);
+}
+
+[data-md-color-scheme="ponylang"] .md-typeset a {
+  color: var(--cr-green-dim);
+}
+
+[data-md-color-scheme="ponylang"] .md-typeset a:hover {
+  color: var(--cr-green);
+}
+
+[data-md-color-scheme="ponylang"] .md-typeset blockquote {
+  border-left: 2px solid var(--cr-green);
+  color: var(--cr-text-dim);
+}
+
+[data-md-color-scheme="ponylang"] .md-typeset hr {
+  border-color: var(--cr-border);
+}
+
+[data-md-color-scheme="ponylang"] .md-typeset table:not([class]) {
+  border: 1px solid var(--cr-border);
+}
+
+[data-md-color-scheme="ponylang"] .md-typeset table:not([class]) th {
+  background-color: var(--cr-bg-raised);
+  color: var(--cr-green-dim);
+  border-bottom: 1px solid var(--cr-border);
+}
+
+[data-md-color-scheme="ponylang"] .md-typeset table:not([class]) td {
+  border-top: 1px solid var(--cr-border-sub);
+}
+
+/* ── header ── */
+
+[data-md-color-scheme="ponylang"] .md-header {
+  background-color: var(--cr-bg-raised);
+  border-bottom: 1px solid var(--cr-border);
+  box-shadow: none;
+}
+
+[data-md-color-scheme="ponylang"] .md-header__title {
+  font-family: var(--cr-font-mono);
+  color: var(--cr-green);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+[data-md-color-scheme="ponylang"] .md-header .md-icon {
+  color: var(--cr-text-dim);
+}
+
+[data-md-color-scheme="ponylang"] .md-header .md-icon:hover {
+  color: var(--cr-green);
+}
+
+/* ── search ── */
+
+[data-md-color-scheme="ponylang"] .md-search__input {
+  background-color: var(--cr-bg);
+  color: var(--cr-text);
+  font-family: var(--cr-font-mono);
+}
+
+[data-md-color-scheme="ponylang"] .md-search__input::placeholder {
+  color: var(--cr-text-dead);
+}
+
+[data-md-color-scheme="ponylang"] .md-search-result__meta {
+  background-color: var(--cr-bg-raised);
+  color: var(--cr-text-dim);
+}
+
+[data-md-color-scheme="ponylang"] .md-search-result__item {
+  border-bottom-color: var(--cr-border-sub);
+}
+
+/* ── sidebar / navigation ── */
+
+[data-md-color-scheme="ponylang"] .md-sidebar {
+  background-color: var(--cr-bg);
+  border-right: 1px solid var(--cr-border-sub);
+}
+
+[data-md-color-scheme="ponylang"] .md-nav {
+  font-family: var(--cr-font-mono);
+  font-size: 0.7rem;
+}
+
+[data-md-color-scheme="ponylang"] .md-nav__link {
+  color: var(--cr-text-mute);
+}
+
+[data-md-color-scheme="ponylang"] .md-nav__link:hover {
+  color: var(--cr-green);
+}
+
+[data-md-color-scheme="ponylang"] .md-nav__link--active,
+[data-md-color-scheme="ponylang"] .md-nav__item--active > .md-nav__link {
+  color: var(--cr-green-dim);
+}
+
+[data-md-color-scheme="ponylang"] .md-nav__item--nested > .md-nav__link {
+  color: var(--cr-text-dim);
+}
+
+/* ── tabs (top-level nav) ── */
+
+[data-md-color-scheme="ponylang"] .md-tabs {
+  background-color: var(--cr-bg-raised);
+  border-bottom: 1px solid var(--cr-border-sub);
+}
+
+[data-md-color-scheme="ponylang"] .md-tabs__link {
+  color: var(--cr-text-dead);
+  font-family: var(--cr-font-mono);
+}
+
+[data-md-color-scheme="ponylang"] .md-tabs__link:hover,
+[data-md-color-scheme="ponylang"] .md-tabs__link--active {
+  color: var(--cr-green);
+}
+
+/* ── footer ── */
+
+[data-md-color-scheme="ponylang"] .md-footer {
+  background-color: var(--cr-bg-raised);
+  border-top: 1px solid var(--cr-border);
+}
+
+[data-md-color-scheme="ponylang"] .md-footer-meta {
+  background-color: var(--cr-bg);
+  border-top: 1px solid var(--cr-border-sub);
+}
+
+/* ── content area ── */
+
+[data-md-color-scheme="ponylang"] .md-content {
+  background-color: var(--cr-bg);
+}
+
+/* ── back-to-top button ── */
+
+[data-md-color-scheme="ponylang"] .md-top {
+  background-color: var(--cr-bg-raised);
+  border: 1px solid var(--cr-border);
+  color: var(--cr-green-dim);
+}
+
+[data-md-color-scheme="ponylang"] .md-top:hover {
+  color: var(--cr-green);
+}
+
+/* ── scrollbar (webkit) ── */
+
+[data-md-color-scheme="ponylang"] ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+[data-md-color-scheme="ponylang"] ::-webkit-scrollbar-track {
+  background: var(--cr-bg);
+}
+
+[data-md-color-scheme="ponylang"] ::-webkit-scrollbar-thumb {
+  background: var(--cr-border);
+}
+
+[data-md-color-scheme="ponylang"] ::-webkit-scrollbar-thumb:hover {
+  background: var(--cr-text-dead);
+}

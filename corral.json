@@ -1,9 +1,9 @@
 {
   "packages": ["odbc"],
   "info": {
-    "name": "pony-odbc",
+    "name": "odbc",
     "description": "Pony ODBC library wrapping unixODBC",
-    "version": "0.1.0"
+    "version": "0.0.1"
   },
   "deps": []
 }

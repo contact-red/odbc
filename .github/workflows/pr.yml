@@ -1,0 +1,61 @@
+name: PR
+
+on: [ push, workflow_dispatch ]
+
+concurrency:
+  group: pr-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  packages: read
+
+jobs:
+  superlinter:
+    name: Lint bash, docker, markdown, and yaml
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.1.1
+      - name: Lint codebase
+        uses: docker://github/super-linter:v3.8.3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VALIDATE_ALL_CODEBASE: true
+          VALIDATE_BASH: true
+          VALIDATE_DOCKERFILE: true
+          VALIDATE_MD: true
+          VALIDATE_YAML: true
+
+  vs-release-ponyc-linux:
+    name: Test against odbc test image
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/redvers/pony-dependency-builder:latest
+    services:
+      postgres:
+        image: postgres:14.5
+        env:
+          POSTGRES_DB: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_HOST_AUTH_METHOD: md5
+          POSTGRES_INITDB_ARGS: "--auth-host=md5"
+        # Set health checks to wait until postgres has started
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      mariadb:
+        image: mariadb
+        env:
+          MYSQL_USER: pony
+          MYSQL_PASSWORD: pony
+          MYSQL_DATABASE: pony
+          MYSQL_ROOT_PASSWORD: mysql
+        options: --health-cmd="mariadb-admin ping" --health-interval=5s --health-timeout=2s --health-retries=3
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4.1.1
+      - name: Unit tests
+        run: make unit-tests config=debug ssl=0.9.0
