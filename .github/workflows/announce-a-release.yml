@@ -39,7 +39,7 @@ jobs:
         with:
           entrypoint: add-announcement-to-last-week-in-pony
         env:
-          RELEASE_TOKEN: ${{ secrets.ISSUES_TOKEN }}
+          RELEASE_TOKEN: ${{ secrets.CONTACTRED_MAIN_API_TOKEN }}
 
   post-announcement:
     name: Tasks to run after the release has been announced
