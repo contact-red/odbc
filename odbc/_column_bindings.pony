@@ -18,13 +18,13 @@ class ref _ColumnBindings
   let _is_text: Array[Bool] ref
   // Whether column type is unsupported
   let _is_unsupported: Array[Bool] ref
-  let _validate_utf8: Bool
+  let _opts: OdbcOptions
   let _hstmt: Pointer[None] tag
 
   new ref create(hstmt: Pointer[None] tag,
-    validate_utf8: Bool = true) ? =>
+    opts: OdbcOptions = OdbcOptions) ? =>
     _hstmt = hstmt
-    _validate_utf8 = validate_utf8
+    _opts = opts
     var nc: I16 = 0
     @SQLNumResultCols(hstmt, addressof nc)
     _num_cols = nc.usize()
@@ -100,7 +100,7 @@ class ref _ColumnBindings
         // Text column: allocate buffer based on declared col_size, capped.
         // Floor at 4096 — some drivers report col_size=0 for TEXT/LONGVARCHAR.
         let buf_size =
-          (col_size + 1).usize().max(4096).min(16_777_216) // 4 KB .. 16 MB
+          (col_size + 1).usize().max(4096).min(_opts.max_column_bytes())
         let tbuf: String ref = String(buf_size)
         var j: USize = 0
         while j < buf_size do tbuf.push(0); j = j + 1 end
@@ -226,7 +226,7 @@ class ref _ColumnBindings
         then
           return SqlDecimal(text)
         else
-          if _validate_utf8 and (not _is_valid_utf8(text)) then
+          if _opts.validate_utf8 and (not _is_valid_utf8(text)) then
             return FetchError(InvalidUtf8)
           end
           return SqlText(text)
@@ -321,25 +321,29 @@ class ref _ColumnBindings
     Retrieve full text for column i when the bound buffer was too small.
     Concatenates the head (from the bound buffer) with the remainder
     retrieved via SQLGetData.
+
+    Uses a tail buffer sized to exactly the remaining bytes plus one for
+    the null terminator. This is load-bearing: psqlODBC returns the
+    post-bind tail when the buffer can hold only the tail, but returns
+    the full value from the start when given a significantly larger
+    buffer — so a generous chunk size would corrupt the result.
     """
     try
       let tbuf = _text_bufs(i)?
       let total_len = _indicators(i)?.usize()
-      let buf_cap = tbuf.size()
-      // Bound buffer holds buf_cap-1 data bytes (last is null terminator)
-      let head_len = buf_cap - 1
+      // Bound buffer holds tbuf.size()-1 data bytes (last is null terminator)
+      let head_len = tbuf.size() - 1
 
-      // Cap total retrieval at 16 MB
-      if total_len > 16_777_216 then
+      if total_len > _opts.max_column_bytes() then
         return FetchError(ColumnTooLarge)
       end
 
       // Head: data already written into the bound buffer by SQLFetch
       let head: String val = tbuf.substring(0, head_len.isize())
 
-      // Tail: retrieve remaining bytes via SQLGetData.
-      // Per ODBC spec, after SQLFetch with a bound column, SQLGetData
-      // returns data starting after the last byte returned by the bind.
+      // Tail: retrieve remaining bytes via SQLGetData. Per ODBC spec,
+      // after SQLFetch with a bound column, SQLGetData returns data
+      // starting after the last byte returned by the bind.
       let remaining = total_len - head_len
       let tail_buf: String ref = String(remaining + 1)
       var j: USize = 0
@@ -358,7 +362,7 @@ class ref _ColumnBindings
         addressof tail_ind)
 
       if not _ODBC.ok(rc) then
-        return FetchError(ColumnTooLarge)
+        return FetchError(DriverFetchError)
       end
 
       let tail_len: USize =

@@ -14,7 +14,7 @@ class ref Cursor
   new ref _create(
     hstmt: Pointer[None] tag,
     conn_alive: _AliveFlag ref,
-    validate_utf8: Bool = true) ?
+    opts: OdbcOptions = OdbcOptions) ?
   =>
     _hstmt = hstmt
     _conn_alive = conn_alive
@@ -22,7 +22,7 @@ class ref Cursor
     _last_warnings = None
     // Set up column bindings immediately — cursor is already open.
     // Raises error on failure so Connection.query() can report it.
-    _col_bindings = _ColumnBindings(hstmt, validate_utf8)?
+    _col_bindings = _ColumnBindings(hstmt, opts)?
 
   fun ref fetch(): (Row | EndOfRows | FetchError) =>
     """
@@ -118,14 +118,21 @@ class ref Cursor
     Any CancelTokens obtained from cancel_token() become invalid after
     this call. Using a token after close() is undefined behavior — see
     cancel_token() for the lifetime contract.
+
+    If the connection has already been closed, the driver freed this
+    handle transitively via SQLFreeHandle(SQL_HANDLE_DBC); in that case
+    we only mark ourselves closed without a second SQLFreeHandle call
+    (which would be UB on a dangling handle).
     """
     if _closed then return end
-    @SQLFreeHandle(_ODBC.handle_stmt(), _hstmt)
+    if _conn_alive.is_alive() then
+      @SQLFreeHandle(_ODBC.handle_stmt(), _hstmt)
+    end
     _hstmt = Pointer[None]
     _closed = true
     _col_bindings = None
 
   fun _final() =>
-    if not _closed then
+    if (not _closed) and _conn_alive.is_alive() then
       @SQLFreeHandle(_ODBC.handle_stmt(), _hstmt)
     end

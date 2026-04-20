@@ -23,11 +23,11 @@ actor DbSession
   """
 
   var _conn: (Connection | ConnectError)
-  let _validate_utf8: Bool
+  let _opts: OdbcOptions
 
-  new create(dsn: Dsn, validate_utf8: Bool = true) =>
-    _validate_utf8 = validate_utf8
-    _conn = Odbc.connect(dsn, validate_utf8)
+  new create(dsn: Dsn, opts: OdbcOptions = OdbcOptions) =>
+    _opts = opts
+    _conn = Odbc.connect(dsn, opts)
 
   be exec(sql: String val, promise: Promise[(RowCount | ExecError)]) =>
     """

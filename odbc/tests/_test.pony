@@ -27,6 +27,9 @@ actor Main is TestList
         _DescribeParamClassifierProperty))
     test(Property1UnitTest[_DiagLeakInput](_ErrorRedactionProperty))
     test(Property1UnitTest[_SqlValueInput](_SqlValueRoundtripProperty))
+    test(Property1UnitTest[_MaxColBytesInput](_MaxColumnBytesValidProperty))
+    test(Property1UnitTest[_MaxColBytesInput](_MaxColumnBytesInvalidProperty))
+    test(Property1UnitTest[_MaxColBytesInput](_MaxColumnBytesMixedProperty))
 
     // Integration tests (need real drivers)
     test(_ConnectDisconnectTest)

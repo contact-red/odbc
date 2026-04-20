@@ -5,13 +5,14 @@ primitive Odbc
 
   fun connect(
     dsn: Dsn,
-    validate_utf8: Bool = true)
+    opts: OdbcOptions = OdbcOptions)
     : (Connection | ConnectError)
   =>
     """
     Connect to an ODBC data source. Each Connection owns its own
     SQLHENV (no shared environment handle across connections).
-    Set validate_utf8 to false to skip UTF-8 validation on text columns.
+    OdbcOptions carries UTF-8 validation and per-column size limits;
+    see its definition for defaults.
     """
 
     // Allocate environment handle
@@ -74,7 +75,7 @@ primitive Odbc
         None
       end
 
-    Connection._create(henv, hdbc, warnings, validate_utf8)
+    Connection._create(henv, hdbc, warnings, opts)
 
 class ref Connection
   """
@@ -88,13 +89,13 @@ class ref Connection
   var _in_tx: Bool
   let _alive: _AliveFlag
   var _last_warnings: (Warnings | None)
-  let _validate_utf8: Bool
+  let _opts: OdbcOptions
 
   new ref _create(
     henv: Pointer[None] tag,
     hdbc: Pointer[None] tag,
     warnings: (Warnings | None) = None,
-    validate_utf8: Bool = true)
+    opts: OdbcOptions = OdbcOptions)
   =>
     _henv = henv
     _hdbc = hdbc
@@ -102,7 +103,7 @@ class ref Connection
     _in_tx = false
     _alive = _AliveFlag
     _last_warnings = warnings
-    _validate_utf8 = validate_utf8
+    _opts = opts
 
   fun ref exec(sql: String val): (RowCount | ExecError) =>
     """
@@ -210,7 +211,7 @@ class ref Connection
     @SQLNumParams(hstmt, addressof num_params)
 
     Statement._create(
-      hstmt, num_params.u16(), _alive, _validate_utf8)
+      hstmt, num_params.u16(), _alive, _opts)
 
   fun ref prepare_p(sql: String val): Statement ? =>
     """
@@ -260,7 +261,7 @@ class ref Connection
     end
 
     try
-      Cursor._create(hstmt, _alive, _validate_utf8)?
+      Cursor._create(hstmt, _alive, _opts)?
     else
       // Column binding failed — close cursor and free handle
       @SQLFreeStmt(hstmt, _ODBC.sql_close_cursor())

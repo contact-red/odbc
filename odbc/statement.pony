@@ -17,13 +17,13 @@ class ref Statement
   var _params_bound_to_odbc: Bool
   var _needs_rebind: Bool
   var _col_bindings: (_ColumnBindings | None)
-  let _validate_utf8: Bool
+  let _opts: OdbcOptions
 
   new ref _create(
     hstmt: Pointer[None] tag,
     param_count: U16,
     conn_alive: _AliveFlag ref,
-    validate_utf8: Bool = true)
+    opts: OdbcOptions = OdbcOptions)
   =>
     _hstmt = hstmt
     _param_count = param_count
@@ -34,7 +34,7 @@ class ref Statement
     _params_bound_to_odbc = false
     _needs_rebind = false
     _col_bindings = None
-    _validate_utf8 = validate_utf8
+    _opts = opts
 
     let n = param_count.usize()
     _bound_flags = Array[Bool].init(false, n)
@@ -401,7 +401,7 @@ class ref Statement
 
     // Set up column bindings for fetching
     try
-      _col_bindings = _ColumnBindings(_hstmt, _validate_utf8)?
+      _col_bindings = _ColumnBindings(_hstmt, _opts)?
     else
       // Column binding failed — close the driver-level cursor so the
       // statement can be reused via close_cursor() / re-execute.
