@@ -1166,6 +1166,232 @@ class iso _TextTruncationDetectionTest is UnitTest
       conn.close()
     end
 
+class iso _MetadataParamTypesTest is UnitTest
+  fun name(): String => "integration: Statement.parameter_types"
+
+  fun apply(h: TestHelper) =>
+    let profile = _TestDriver(h)
+    try
+      let conn = _TestSetup.connect(h)?
+      _TestSetup.exec(conn, "DROP TABLE IF EXISTS _test_meta_params", h)
+      _TestSetup.exec(
+        conn,
+        "CREATE TABLE _test_meta_params"
+          + " (id INTEGER NOT NULL, name VARCHAR(32))",
+        h)
+
+      match \exhaustive\
+        conn.prepare("INSERT INTO _test_meta_params VALUES (?, ?)")
+      | let stmt: Statement =>
+        match \exhaustive\ stmt.parameter_types()
+        | let tags: Array[SqlTypeTag] val =>
+          h.assert_eq[USize](2, tags.size(), "expected 2 param tags")
+          if profile.describe_param_accurate then
+            try
+              match tags(0)?
+              | SqlTagInteger => None
+              else h.fail("param 1 should be Integer, was "
+                + tags(0)?.string())
+              end
+              match tags(1)?
+              | SqlTagText => None
+              else h.fail("param 2 should be Text, was "
+                + tags(1)?.string())
+              end
+            else
+              h.fail("param tag read error")
+            end
+          else
+            h.log(
+              profile.name
+                + " does not accurately describe params; "
+                + "tag check skipped")
+          end
+        | let e: MetadataError =>
+          h.fail("parameter_types: " + e.string())
+        end
+        stmt.close()
+      | let e: PrepareError => h.fail("prepare: " + e.string())
+      end
+
+      _TestSetup.exec(conn, "DROP TABLE IF EXISTS _test_meta_params", h)
+      conn.close()
+    end
+
+class iso _MetadataColumnTypesTest is UnitTest
+  fun name(): String => "integration: Statement.column_types"
+
+  fun apply(h: TestHelper) =>
+    let profile = _TestDriver(h)
+    try
+      let conn = _TestSetup.connect(h)?
+      _TestSetup.exec(conn, "DROP TABLE IF EXISTS _test_meta_cols", h)
+      _TestSetup.exec(
+        conn,
+        "CREATE TABLE _test_meta_cols"
+          + " (id INTEGER NOT NULL, name VARCHAR(32), created TIMESTAMP)",
+        h)
+
+      match \exhaustive\
+        conn.prepare(
+          "SELECT id, name, created FROM _test_meta_cols WHERE id > ?")
+      | let stmt: Statement =>
+        match \exhaustive\ stmt.column_types()
+        | let cols: Array[ColumnMeta] val =>
+          h.assert_eq[USize](3, cols.size(), "expected 3 columns")
+          try
+            let c0 = cols(0)?
+            h.assert_eq[String val]("id", c0.name)
+            match c0.type_tag
+            | SqlTagInteger => None
+            else h.fail("col id should be Integer")
+            end
+            if profile.reports_not_null then
+              match c0.nullable
+              | NoNulls => None
+              else h.fail("col id should be NOT NULL, was "
+                + c0.nullable.string())
+              end
+            end
+
+            let c1 = cols(1)?
+            h.assert_eq[String val]("name", c1.name)
+            match c1.type_tag
+            | SqlTagText => None
+            else h.fail("col name should be Text")
+            end
+            match c1.nullable
+            | Nullable => None
+            | NullableUnknown => None
+            else h.fail("col name should be Nullable/Unknown, was "
+              + c1.nullable.string())
+            end
+
+            let c2 = cols(2)?
+            h.assert_eq[String val]("created", c2.name)
+            match c2.type_tag
+            | SqlTagTimestamp => None
+            else h.fail("col created should be Timestamp")
+            end
+          else
+            h.fail("column meta read error")
+          end
+        | let e: MetadataError => h.fail("column_types: " + e.string())
+        end
+        stmt.close()
+      | let e: PrepareError => h.fail("prepare: " + e.string())
+      end
+
+      _TestSetup.exec(conn, "DROP TABLE IF EXISTS _test_meta_cols", h)
+      conn.close()
+    end
+
+class iso _MetadataEmptyTest is UnitTest
+  fun name(): String => "integration: metadata for 0-param / 0-column statements"
+
+  fun apply(h: TestHelper) =>
+    try
+      let conn = _TestSetup.connect(h)?
+      _TestSetup.exec(conn, "DROP TABLE IF EXISTS _test_meta_empty", h)
+      _TestSetup.exec(
+        conn, "CREATE TABLE _test_meta_empty (id INTEGER)", h)
+
+      // 0-param SELECT: parameter_types empty, column_types non-empty.
+      match \exhaustive\ conn.prepare("SELECT id FROM _test_meta_empty")
+      | let stmt: Statement =>
+        match \exhaustive\ stmt.parameter_types()
+        | let tags: Array[SqlTypeTag] val =>
+          h.assert_eq[USize](0, tags.size(), "0 params expected")
+        | let e: MetadataError => h.fail("parameter_types: " + e.string())
+        end
+
+        match \exhaustive\ stmt.column_types()
+        | let cols: Array[ColumnMeta] val =>
+          h.assert_eq[USize](1, cols.size(), "1 column expected")
+        | let e: MetadataError => h.fail("column_types: " + e.string())
+        end
+        stmt.close()
+      | let e: PrepareError => h.fail("prepare select: " + e.string())
+      end
+
+      // 0-column INSERT (DML): column_types returns empty, params non-empty.
+      match \exhaustive\
+        conn.prepare("INSERT INTO _test_meta_empty VALUES (?)")
+      | let stmt: Statement =>
+        match \exhaustive\ stmt.column_types()
+        | let cols: Array[ColumnMeta] val =>
+          h.assert_eq[USize](0, cols.size(), "0 result cols expected")
+        | let e: MetadataError => h.fail("column_types: " + e.string())
+        end
+
+        match \exhaustive\ stmt.parameter_types()
+        | let tags: Array[SqlTypeTag] val =>
+          h.assert_eq[USize](1, tags.size(), "1 param expected")
+        | let e: MetadataError =>
+          h.fail("parameter_types: " + e.string())
+        end
+        stmt.close()
+      | let e: PrepareError => h.fail("prepare insert: " + e.string())
+      end
+
+      _TestSetup.exec(conn, "DROP TABLE IF EXISTS _test_meta_empty", h)
+      conn.close()
+    end
+
+class iso _MetadataClosedTest is UnitTest
+  fun name(): String => "integration: metadata after close returns closed errors"
+
+  fun apply(h: TestHelper) =>
+    try
+      let conn = _TestSetup.connect(h)?
+
+      match \exhaustive\ conn.prepare("SELECT 1")
+      | let stmt: Statement =>
+        stmt.close()
+
+        match stmt.parameter_types()
+        | let _: Array[SqlTypeTag] val =>
+          h.fail("parameter_types on closed statement should error")
+        | let e: MetadataError =>
+          match e.kind()
+          | MetadataStatementClosed => None
+          else h.fail(
+            "expected MetadataStatementClosed, got: " + e.string())
+          end
+        end
+
+        match stmt.column_types()
+        | let _: Array[ColumnMeta] val =>
+          h.fail("column_types on closed statement should error")
+        | let e: MetadataError =>
+          match e.kind()
+          | MetadataStatementClosed => None
+          else h.fail(
+            "expected MetadataStatementClosed, got: " + e.string())
+          end
+        end
+      | let e: PrepareError => h.fail("prepare: " + e.string())
+      end
+
+      // MetadataConnectionClosed: statement open, connection closed.
+      match \exhaustive\ conn.prepare("SELECT 1")
+      | let stmt: Statement =>
+        conn.close()
+
+        match stmt.parameter_types()
+        | let _: Array[SqlTypeTag] val =>
+          h.fail("parameter_types after conn close should error")
+        | let e: MetadataError =>
+          match e.kind()
+          | MetadataConnectionClosed => None
+          else h.fail(
+            "expected MetadataConnectionClosed, got: " + e.string())
+          end
+        end
+      | let e: PrepareError => h.fail("prepare2: " + e.string())
+      end
+    end
+
 class iso _DbSessionTest is UnitTest
   fun name(): String => "integration: DbSession actor with promises"
 

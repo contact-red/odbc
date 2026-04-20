@@ -22,6 +22,9 @@ actor Main is TestList
     test(Property1UnitTest[USize](_RowNullProperty))
     test(Property1UnitTest[_RowOutOfRangeInput](_RowOutOfRangeProperty))
     test(Property1UnitTest[_SqlstateInput](_SqlstateClassifierProperty))
+    test(
+      Property1UnitTest[_DescribeParamStateInput](
+        _DescribeParamClassifierProperty))
     test(Property1UnitTest[_DiagLeakInput](_ErrorRedactionProperty))
     test(Property1UnitTest[_SqlValueInput](_SqlValueRoundtripProperty))
 
@@ -45,3 +48,7 @@ actor Main is TestList
     test(_LargeTextRoundtripTest)
     test(_TextTruncationDetectionTest)
     test(_DbSessionTest)
+    test(_MetadataParamTypesTest)
+    test(_MetadataColumnTypesTest)
+    test(_MetadataEmptyTest)
+    test(_MetadataClosedTest)

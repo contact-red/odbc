@@ -56,6 +56,73 @@ class iso _SqlstateClassifierProperty is Property1[_SqlstateInput]
     let result = ExecErrorClassifier.classify(diag)
     ph.assert_eq[String val](input.expected_str, result.string())
 
+class val _DescribeParamStateInput
+  let sqlstate: String val
+  let expects_unsupported: Bool
+
+  new val create(sqlstate': String val, expects_unsupported': Bool) =>
+    sqlstate = sqlstate'
+    expects_unsupported = expects_unsupported'
+
+class iso _DescribeParamClassifierProperty
+  is Property1[_DescribeParamStateInput]
+  fun name(): String =>
+    "DescribeParam classifier maps IM001/HYC00 to unsupported"
+
+  fun gen(): Generator[_DescribeParamStateInput] =>
+    Generator[_DescribeParamStateInput](
+      object is GenObj[_DescribeParamStateInput]
+        fun generate(rnd: Randomness): _DescribeParamStateInput^ =>
+          let which = rnd.usize(0, 4)
+          match which
+          | 0 => _DescribeParamStateInput("IM001", true)
+          | 1 => _DescribeParamStateInput("HYC00", true)
+          | 2 => _DescribeParamStateInput("HY000", false)
+          | 3 => _DescribeParamStateInput("42S02", false)
+          else
+            // Random non-matching state.
+            let s =
+              recover val
+                let buf = String(5)
+                var i: USize = 0
+                while i < 5 do
+                  buf.push(rnd.u8(0x30, 0x39))
+                  i = i + 1
+                end
+                buf
+              end
+            _DescribeParamStateInput(s,
+              (s == "IM001") or (s == "HYC00"))
+          end
+      end)
+
+  fun property(
+    input: _DescribeParamStateInput, ph: PropertyHelper)
+  =>
+    let diag: DiagChain =
+      recover val
+      Array[DiagRecord] .> push(
+        DiagRecord(input.sqlstate, 0, "test"))
+    end
+    let kind = DescribeParamErrorClassifier.classify(diag)
+    if input.expects_unsupported then
+      match kind
+      | DriverDoesNotSupportDescribeParam => None
+      else
+        ph.fail(
+          "expected DriverDoesNotSupportDescribeParam for "
+            + input.sqlstate + ", got " + kind.string())
+      end
+    else
+      match kind
+      | DriverMetadataError => None
+      else
+        ph.fail(
+          "expected DriverMetadataError for "
+            + input.sqlstate + ", got " + kind.string())
+      end
+    end
+
 class val _DiagLeakInput
   let secret_text: String val
   let sqlstate: String val

@@ -58,6 +58,170 @@ class ref Statement
     end
     None
 
+  fun ref parameter_types(): (Array[SqlTypeTag] val | MetadataError) =>
+    """
+    SQL type tag for each parameter placeholder, as reported by
+    SQLDescribeParam. Available after prepare() succeeds; no binding or
+    execution required.
+
+    Some drivers (notably SQLite's ODBC driver) do not implement
+    SQLDescribeParam and return MetadataError(
+    DriverDoesNotSupportDescribeParam). psqlODBC supports it.
+    """
+    if _closed then
+      return MetadataError(MetadataStatementClosed)
+    end
+    if not _conn_alive.is_alive() then
+      return MetadataError(MetadataConnectionClosed)
+    end
+
+    let n = _param_count.usize()
+    let tags = recover iso Array[SqlTypeTag](n) end
+
+    var i: U16 = 1
+    while i.usize() <= n do
+      var data_type: I16 = 0
+      var param_size: U64 = 0
+      var decimal_digits: I16 = 0
+      var nullable: I16 = 0
+
+      let rc =
+        @SQLDescribeParam(
+        _hstmt,
+        i,
+        addressof data_type,
+        addressof param_size,
+        addressof decimal_digits,
+        addressof nullable)
+
+      if not _ODBC.ok(rc) then
+        let diag = _DiagHelper.read(_ODBC.handle_stmt(), _hstmt)
+        return MetadataError(
+          DescribeParamErrorClassifier.classify(diag), diag)
+      end
+
+      tags.push(_SqlTypeTagMap(data_type))
+      i = i + 1
+    end
+
+    consume tags
+
+  fun ref column_types(): (Array[ColumnMeta] val | MetadataError) =>
+    """
+    Metadata for each result column (name, type tag, nullability) as
+    reported by SQLDescribeCol. Available after prepare() succeeds.
+    Returns an empty array for non-result statements (INSERT, UPDATE,
+    DELETE, DDL).
+    """
+    if _closed then
+      return MetadataError(MetadataStatementClosed)
+    end
+    if not _conn_alive.is_alive() then
+      return MetadataError(MetadataConnectionClosed)
+    end
+
+    var num_cols_raw: I16 = 0
+    @SQLNumResultCols(_hstmt, addressof num_cols_raw)
+    let num_cols = num_cols_raw.usize()
+
+    let metas = recover iso Array[ColumnMeta](num_cols) end
+
+    var col: U16 = 1
+    while col.usize() <= num_cols do
+      match _describe_col(col)
+      | let m: ColumnMeta => metas.push(m)
+      | let e: MetadataError => return e
+      end
+      col = col + 1
+    end
+
+    consume metas
+
+  fun ref _describe_col(col: U16): (ColumnMeta | MetadataError) =>
+    """
+    Read metadata for a single result column. Two-pass: start with a
+    128-byte name buffer, retry with an exact-size buffer if the driver
+    reports a longer name.
+    """
+    let initial_cap: USize = 128
+    var name_buf = Array[U8].init(0, initial_cap)
+    var name_len: I16 = 0
+    var data_type: I16 = 0
+    var col_size: U64 = 0
+    var decimal_digits: I16 = 0
+    var nullable: I16 = 0
+
+    var rc =
+      @SQLDescribeCol(
+      _hstmt,
+      col,
+      name_buf.cpointer(),
+      initial_cap.i16(),
+      addressof name_len,
+      addressof data_type,
+      addressof col_size,
+      addressof decimal_digits,
+      addressof nullable)
+
+    if not _ODBC.ok(rc) then
+      let diag = _DiagHelper.read(_ODBC.handle_stmt(), _hstmt)
+      return MetadataError(DriverMetadataError, diag)
+    end
+
+    // col_name_max includes the null terminator, so truncation happens
+    // when name_len >= (initial_cap - 1). Retry once with an exact buffer.
+    if name_len.usize() >= (initial_cap - 1) then
+      let bigger_cap = name_len.usize() + 1
+      name_buf = Array[U8].init(0, bigger_cap)
+      rc =
+        @SQLDescribeCol(
+        _hstmt,
+        col,
+        name_buf.cpointer(),
+        bigger_cap.i16(),
+        addressof name_len,
+        addressof data_type,
+        addressof col_size,
+        addressof decimal_digits,
+        addressof nullable)
+      if not _ODBC.ok(rc) then
+        let diag = _DiagHelper.read(_ODBC.handle_stmt(), _hstmt)
+        return MetadataError(DriverMetadataError, diag)
+      end
+    end
+
+    let actual_len = name_len.usize().min(name_buf.size())
+    let name_tmp = String(actual_len)
+    var j: USize = 0
+    while j < actual_len do
+      try name_tmp.push(name_buf(j)?) end
+      j = j + 1
+    end
+    let name: String val = name_tmp.clone()
+
+    ColumnMeta(
+      name,
+      _SqlTypeTagMap(data_type),
+      _NullabilityMap(nullable))
+
+  fun ref parameter_types_p(): Array[SqlTypeTag] val ? =>
+    """
+    Partial variant of parameter_types(). Raises on error.
+    """
+    match \exhaustive\ parameter_types()
+    | let a: Array[SqlTypeTag] val => a
+    | let _: MetadataError => error
+    end
+
+  fun ref column_types_p(): Array[ColumnMeta] val ? =>
+    """
+    Partial variant of column_types(). Raises on error.
+    """
+    match \exhaustive\ column_types()
+    | let a: Array[ColumnMeta] val => a
+    | let _: MetadataError => error
+    end
+
   fun ref bind(i: ParamIndex, v: SqlValue): (Bound | BindError) =>
     """
     Write value into parameter scratch slot. Atomic per param.
@@ -497,18 +661,25 @@ class ref Statement
     Any CancelTokens obtained from cancel_token() become invalid after
     this call. Using a token after close() is undefined behavior — see
     cancel_token() for the lifetime contract.
+
+    If the connection has already been closed, the driver freed this
+    handle transitively via SQLFreeHandle(SQL_HANDLE_DBC); in that case
+    we only mark ourselves closed without a second SQLFreeHandle call
+    (which would be UB on a dangling handle).
     """
     if _closed then return end
-    if _cursor_open then
-      @SQLFreeStmt(_hstmt, _ODBC.sql_close_cursor())
-      _cursor_open = false
+    if _conn_alive.is_alive() then
+      if _cursor_open then
+        @SQLFreeStmt(_hstmt, _ODBC.sql_close_cursor())
+      end
+      @SQLFreeHandle(_ODBC.handle_stmt(), _hstmt)
     end
-    @SQLFreeHandle(_ODBC.handle_stmt(), _hstmt)
+    _cursor_open = false
     _hstmt = Pointer[None]
     _closed = true
     _col_bindings = None
 
   fun _final() =>
-    if not _closed then
+    if (not _closed) and _conn_alive.is_alive() then
       @SQLFreeHandle(_ODBC.handle_stmt(), _hstmt)
     end

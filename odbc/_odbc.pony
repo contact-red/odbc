@@ -28,6 +28,9 @@ use @SQLPrepare[I16](stmt: Pointer[None] tag, sql: Pointer[None] tag,
   text_len: I32)
 use @SQLExecute[I16](stmt: Pointer[None] tag)
 use @SQLNumParams[I16](stmt: Pointer[None] tag, param_count: Pointer[None] tag)
+use @SQLDescribeParam[I16](stmt: Pointer[None] tag, param_num: U16,
+  data_type: Pointer[None] tag, param_size: Pointer[None] tag,
+  decimal_digits: Pointer[None] tag, nullable: Pointer[None] tag)
 use @SQLBindParameter[I16](stmt: Pointer[None] tag, param_num: U16,
   input_output_type: I16, value_type: I16,
   param_type: I16, column_size: U64,
@@ -143,6 +146,11 @@ primitive _ODBC
   // SQLBindParameter direction
   fun sql_param_input(): I16 => 1
 
+  // Column/parameter nullability (from SQLDescribeCol/SQLDescribeParam)
+  fun sql_no_nulls(): I16 => 0
+  fun sql_nullable(): I16 => 1
+  fun sql_nullable_unknown(): I16 => 2
+
   // Null indicator
   fun sql_null_data(): I64 => -1
   fun sql_no_row_count(): I64 => -1
@@ -156,3 +164,41 @@ primitive _ODBC
 
   fun has_info(rc: I16): Bool =>
     rc == sql_success_with_info()
+
+primitive _SqlTypeTagMap
+  """
+  Map an ODBC SQL type code (from SQLDescribeCol/SQLDescribeParam) to
+  the library's SqlTypeTag. Types outside the mapped set become
+  SqlTagUnknown with the raw code preserved for caller inspection.
+  """
+  fun apply(data_type: I16): SqlTypeTag =>
+    match data_type
+    | _ODBC.sql_bit() => SqlTagBool
+    | _ODBC.sql_tinyint() => SqlTagTinyInt
+    | _ODBC.sql_smallint() => SqlTagSmallInt
+    | _ODBC.sql_integer() => SqlTagInteger
+    | _ODBC.sql_bigint() => SqlTagBigInt
+    | _ODBC.sql_real() => SqlTagFloat
+    | _ODBC.sql_float() => SqlTagFloat
+    | _ODBC.sql_double() => SqlTagFloat
+    | _ODBC.sql_char() => SqlTagText
+    | _ODBC.sql_varchar() => SqlTagText
+    | _ODBC.sql_longvarchar() => SqlTagText
+    | _ODBC.sql_type_date() => SqlTagDate
+    | _ODBC.sql_type_time() => SqlTagTime
+    | _ODBC.sql_type_timestamp() => SqlTagTimestamp
+    | _ODBC.sql_numeric() => SqlTagDecimal
+    | _ODBC.sql_decimal() => SqlTagDecimal
+    else SqlTagUnknown(data_type)
+    end
+
+primitive _NullabilityMap
+  """
+  Map the ODBC nullable indicator (SQL_NO_NULLS, SQL_NULLABLE,
+  SQL_NULLABLE_UNKNOWN) to the library's Nullability tri-state.
+  """
+  fun apply(n: I16): Nullability =>
+    if n == _ODBC.sql_no_nulls() then NoNulls
+    elseif n == _ODBC.sql_nullable() then Nullable
+    else NullableUnknown
+    end

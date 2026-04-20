@@ -8,12 +8,28 @@ class val DriverProfile
   """
   let name: String val
   let has_decimal: Bool
+  let describe_param_accurate: Bool
+    """
+    Whether SQLDescribeParam returns the declared column's SQL type, or
+    a generic placeholder. psqlODBC introspects the prepared plan and
+    reports the actual type. MySQL/MariaDB's ODBC driver and SQLite's
+    ODBC driver accept the call but return SQL_VARCHAR regardless —
+    their client protocol does not convey parameter type metadata.
+    """
+  let reports_not_null: Bool
+    """
+    Whether SQLDescribeCol reports NOT NULL constraints on a column.
+    SQLite's ODBC driver does not, and reports every column as
+    SQL_NULLABLE.
+    """
   let large_text_sizes: Array[USize] val
   let huge_text_col_type: String val
 
   new val postgresql() =>
     name = "postgresql"
     has_decimal = true
+    describe_param_accurate = true
+    reports_not_null = true
     large_text_sizes = [as USize:
       100; 2000; 4000; 4095; 4096; 5000; 8000; 10240; 20000; 100000]
     huge_text_col_type = "TEXT"
@@ -21,6 +37,8 @@ class val DriverProfile
   new val mariadb() =>
     name = "mariadb"
     has_decimal = true
+    describe_param_accurate = false
+    reports_not_null = true
     large_text_sizes = [as USize:
       100; 2000; 4000; 4095; 4096; 5000; 8000; 10240; 20000]
     huge_text_col_type = "LONGTEXT"
@@ -28,6 +46,8 @@ class val DriverProfile
   new val sqlite() =>
     name = "sqlite"
     has_decimal = false
+    describe_param_accurate = false
+    reports_not_null = false
     large_text_sizes = [as USize:
       100; 2000; 4000; 4095; 4096; 5000; 8000; 10240; 20000]
     huge_text_col_type = "TEXT"
