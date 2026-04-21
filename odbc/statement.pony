@@ -88,8 +88,8 @@ class ref Statement
         addressof decimal_digits,
         addressof nullable)
 
-      if not _ODBC.ok(rc) then
-        let diag = _DiagHelper.read(_ODBC.handle_stmt(), _hstmt)
+      if not ODBCConstants.ok(rc) then
+        let diag = _DiagHelper.read(ODBCConstants.handle_stmt(), _hstmt)
         return MetadataError(
           DescribeParamErrorClassifier.classify(diag), diag)
       end
@@ -157,8 +157,8 @@ class ref Statement
       addressof decimal_digits,
       addressof nullable)
 
-    if not _ODBC.ok(rc) then
-      let diag = _DiagHelper.read(_ODBC.handle_stmt(), _hstmt)
+    if not ODBCConstants.ok(rc) then
+      let diag = _DiagHelper.read(ODBCConstants.handle_stmt(), _hstmt)
       return MetadataError(DriverMetadataError, diag)
     end
 
@@ -178,8 +178,8 @@ class ref Statement
         addressof col_size,
         addressof decimal_digits,
         addressof nullable)
-      if not _ODBC.ok(rc) then
-        let diag = _DiagHelper.read(_ODBC.handle_stmt(), _hstmt)
+      if not ODBCConstants.ok(rc) then
+        let diag = _DiagHelper.read(ODBCConstants.handle_stmt(), _hstmt)
         return MetadataError(DriverMetadataError, diag)
       end
     end
@@ -237,39 +237,34 @@ class ref Statement
     try
       let buf = _param_bufs(pos)?
 
-      match \exhaustive\ v
+      match v
       | SqlNull =>
-        _param_inds(pos)? = _ODBC.sql_null_data()
-        _param_c_types(pos)? = _ODBC.c_char()
+        _param_inds(pos)?        = SqlNull.len_or_indptr()
+        _param_c_types(pos)?     = SqlNull.c_data_type()
       | let sv: SqlBool =>
-        buf(0)? = if sv.value then 1 else 0 end
-        _param_inds(pos)? = 1
-        _param_c_types(pos)? = _ODBC.c_bit()
+        sv.populate_buffer(buf)?
+        _param_inds(pos)?        = sv.len_or_indptr()
+        _param_c_types(pos)?     = sv.c_data_type()
       | let sv: SqlTinyInt =>
-        var n = sv.value
-        @memcpy(buf.cpointer(), addressof n, 1)
-        _param_inds(pos)? = 0
-        _param_c_types(pos)? = _ODBC.c_stinyint()
+        sv.populate_buffer(buf)?
+        _param_inds(pos)?        = sv.len_or_indptr()
+        _param_c_types(pos)?     = sv.c_data_type()
       | let sv: SqlSmallInt =>
-        var n = sv.value
-        @memcpy(buf.cpointer(), addressof n, 2)
-        _param_inds(pos)? = 0
-        _param_c_types(pos)? = _ODBC.c_sshort()
+        sv.populate_buffer(buf)?
+        _param_inds(pos)?        = sv.len_or_indptr()
+        _param_c_types(pos)?     = sv.c_data_type()
       | let sv: SqlInteger =>
-        var n = sv.value
-        @memcpy(buf.cpointer(), addressof n, 4)
-        _param_inds(pos)? = 0
-        _param_c_types(pos)? = _ODBC.c_slong()
+        sv.populate_buffer(buf)?
+        _param_inds(pos)?        = sv.len_or_indptr()
+        _param_c_types(pos)?     = sv.c_data_type()
       | let sv: SqlBigInt =>
-        var n = sv.value
-        @memcpy(buf.cpointer(), addressof n, 8)
-        _param_inds(pos)? = 0
-        _param_c_types(pos)? = _ODBC.c_sbigint()
+        sv.populate_buffer(buf)?
+        _param_inds(pos)?        = sv.len_or_indptr()
+        _param_c_types(pos)?     = sv.c_data_type()
       | let sv: SqlFloat =>
-        var n = sv.value
-        @memcpy(buf.cpointer(), addressof n, 8)
-        _param_inds(pos)? = 0
-        _param_c_types(pos)? = _ODBC.c_double()
+        sv.populate_buffer(buf)?
+        _param_inds(pos)?        = sv.len_or_indptr()
+        _param_c_types(pos)?     = sv.c_data_type()
       | let sv: SqlText =>
         let bytes = sv.value
         let needed = bytes.size()
@@ -282,23 +277,17 @@ class ref Statement
           @memcpy(buf.cpointer(), bytes.cpointer(), needed)
         end
         _param_inds(pos)? = needed.i64()
-        _param_c_types(pos)? = _ODBC.c_char()
+        _param_c_types(pos)? = ODBCConstants.c_char()
       | let sv: SqlDate =>
-        var yr = sv.year; var mo = sv.month; var dy = sv.day
-        @memcpy(buf.cpointer(), addressof yr, 2)
-        @memcpy(buf.cpointer(2), addressof mo, 2)
-        @memcpy(buf.cpointer(4), addressof dy, 2)
-        _param_inds(pos)? = 0
-        _param_c_types(pos)? = _ODBC.c_type_date()
+        sv.populate_buffer(buf)?
+        _param_inds(pos)?        = sv.len_or_indptr()
+        _param_c_types(pos)?     = sv.c_data_type()
       | let sv: SqlTime =>
-        var hr = sv.hour; var mi = sv.minute; var se = sv.second
-        @memcpy(buf.cpointer(), addressof hr, 2)
-        @memcpy(buf.cpointer(2), addressof mi, 2)
-        @memcpy(buf.cpointer(4), addressof se, 2)
-        _param_inds(pos)? = 0
-        _param_c_types(pos)? = _ODBC.c_type_time()
+        sv.populate_buffer(buf)?
+        _param_inds(pos)?        = sv.len_or_indptr()
+        _param_c_types(pos)?     = sv.c_data_type()
       | let sv: SqlTimestamp =>
-        let needed: USize = _ODBC.timestamp_struct_size()
+        let needed: USize = ODBCConstants.timestamp_struct_size()
         let tbuf =
           if needed > buf.size() then
             let new_buf = Array[U8].init(0, needed)
@@ -319,7 +308,7 @@ class ref Statement
         @memcpy(tbuf.cpointer(10), addressof se, 2)
         @memcpy(tbuf.cpointer(12), addressof fr, 4)
         _param_inds(pos)? = 0
-        _param_c_types(pos)? = _ODBC.c_type_timestamp()
+        _param_c_types(pos)? = ODBCConstants.c_type_timestamp()
       | let sv: SqlDecimal =>
         let bytes = sv.value
         let needed = bytes.size()
@@ -332,7 +321,7 @@ class ref Statement
           @memcpy(buf.cpointer(), bytes.cpointer(), needed)
         end
         _param_inds(pos)? = needed.i64()
-        _param_c_types(pos)? = _ODBC.c_char()
+        _param_c_types(pos)? = ODBCConstants.c_char()
       end
 
       _bound_flags(pos)? = true
@@ -382,14 +371,14 @@ class ref Statement
 
     let rc = @SQLExecute(_hstmt)
     _last_warnings =
-      if _ODBC.has_info(rc) then
-        Warnings(_DiagHelper.read(_ODBC.handle_stmt(), _hstmt))
+      if ODBCConstants.has_info(rc) then
+        Warnings(_DiagHelper.read(ODBCConstants.handle_stmt(), _hstmt))
       else
         None
       end
 
-    if not _ODBC.ok(rc) then
-      let diag = _DiagHelper.read(_ODBC.handle_stmt(), _hstmt)
+    if not ODBCConstants.ok(rc) then
+      let diag = _DiagHelper.read(ODBCConstants.handle_stmt(), _hstmt)
       return ExecError(ExecErrorClassifier.classify(diag), diag)
     end
 
@@ -399,8 +388,8 @@ class ref Statement
     else
       // Column binding failed — close the driver-level cursor so the
       // statement can be reused via close_cursor() / re-execute.
-      @SQLFreeStmt(_hstmt, _ODBC.sql_close_cursor())
-      let diag = _DiagHelper.read(_ODBC.handle_stmt(), _hstmt)
+      @SQLFreeStmt(_hstmt, ODBCConstants.sql_close_cursor())
+      let diag = _DiagHelper.read(ODBCConstants.handle_stmt(), _hstmt)
       return ExecError(ExecErrorClassifier.classify(diag), diag)
     end
 
@@ -429,20 +418,20 @@ class ref Statement
 
     let rc = @SQLExecute(_hstmt)
     _last_warnings =
-      if _ODBC.has_info(rc) then
-        Warnings(_DiagHelper.read(_ODBC.handle_stmt(), _hstmt))
+      if ODBCConstants.has_info(rc) then
+        Warnings(_DiagHelper.read(ODBCConstants.handle_stmt(), _hstmt))
       else
         None
       end
 
-    if not _ODBC.ok(rc) then
-      let diag = _DiagHelper.read(_ODBC.handle_stmt(), _hstmt)
+    if not ODBCConstants.ok(rc) then
+      let diag = _DiagHelper.read(ODBCConstants.handle_stmt(), _hstmt)
       return ExecError(ExecErrorClassifier.classify(diag), diag)
     end
 
     var row_count: I64 = 0
     @SQLRowCount(_hstmt, addressof row_count)
-    if row_count == _ODBC.sql_no_row_count() then
+    if row_count == ODBCConstants.sql_no_row_count() then
       NoRowCount
     else
       row_count.usize()
@@ -484,20 +473,20 @@ class ref Statement
 
         let sql_type: I16 =
           match c_type
-          | _ODBC.c_bit() => _ODBC.sql_bit()
-          | _ODBC.c_stinyint() => _ODBC.sql_tinyint()
-          | _ODBC.c_sshort() => _ODBC.sql_smallint()
-          | _ODBC.c_slong() => _ODBC.sql_integer()
-          | _ODBC.c_sbigint() => _ODBC.sql_bigint()
-          | _ODBC.c_double() => _ODBC.sql_double()
-          | _ODBC.c_type_date() => _ODBC.sql_type_date()
-          | _ODBC.c_type_time() => _ODBC.sql_type_time()
-          | _ODBC.c_type_timestamp() => _ODBC.sql_type_timestamp()
-          else _ODBC.sql_varchar()
+          | ODBCConstants.c_bit() => ODBCConstants.sql_bit()
+          | ODBCConstants.c_stinyint() => ODBCConstants.sql_tinyint()
+          | ODBCConstants.c_sshort() => ODBCConstants.sql_smallint()
+          | ODBCConstants.c_slong() => ODBCConstants.sql_integer()
+          | ODBCConstants.c_sbigint() => ODBCConstants.sql_bigint()
+          | ODBCConstants.c_double() => ODBCConstants.sql_double()
+          | ODBCConstants.c_type_date() => ODBCConstants.sql_type_date()
+          | ODBCConstants.c_type_time() => ODBCConstants.sql_type_time()
+          | ODBCConstants.c_type_timestamp() => ODBCConstants.sql_type_timestamp()
+          else ODBCConstants.sql_varchar()
           end
 
         let col_size: U64 =
-          if c_type == _ODBC.c_char() then
+          if c_type == ODBCConstants.c_char() then
             if ind > 0 then ind.u64() else 1 end
           else
             0
@@ -507,7 +496,7 @@ class ref Statement
           @SQLBindParameter(
           _hstmt,
           param_num,
-          _ODBC.sql_param_input(),
+          ODBCConstants.sql_param_input(),
           c_type,
           sql_type,
           col_size,
@@ -516,8 +505,8 @@ class ref Statement
           buf.size().i64(),
           _param_inds.cpointer(i))
 
-        if not _ODBC.ok(rc) then
-          let diag = _DiagHelper.read(_ODBC.handle_stmt(), _hstmt)
+        if not ODBCConstants.ok(rc) then
+          let diag = _DiagHelper.read(ODBCConstants.handle_stmt(), _hstmt)
           return ExecError(ExecErrorClassifier.classify(diag), diag)
         end
       end
@@ -540,19 +529,19 @@ class ref Statement
 
     let rc = @SQLFetch(_hstmt)
 
-    if rc == _ODBC.sql_no_data() then
+    if rc == ODBCConstants.sql_no_data() then
       return EndOfRows
     end
 
     _last_warnings =
-      if _ODBC.has_info(rc) then
-        Warnings(_DiagHelper.read(_ODBC.handle_stmt(), _hstmt))
+      if ODBCConstants.has_info(rc) then
+        Warnings(_DiagHelper.read(ODBCConstants.handle_stmt(), _hstmt))
       else
         None
       end
 
-    if not _ODBC.ok(rc) then
-      let diag = _DiagHelper.read(_ODBC.handle_stmt(), _hstmt)
+    if not ODBCConstants.ok(rc) then
+      let diag = _DiagHelper.read(ODBCConstants.handle_stmt(), _hstmt)
       return FetchError(DriverFetchError, diag)
     end
 
@@ -592,19 +581,19 @@ class ref Statement
 
     let rc = @SQLFetch(_hstmt)
 
-    if rc == _ODBC.sql_no_data() then
+    if rc == ODBCConstants.sql_no_data() then
       return EndOfRows
     end
 
     _last_warnings =
-      if _ODBC.has_info(rc) then
-        Warnings(_DiagHelper.read(_ODBC.handle_stmt(), _hstmt))
+      if ODBCConstants.has_info(rc) then
+        Warnings(_DiagHelper.read(ODBCConstants.handle_stmt(), _hstmt))
       else
         None
       end
 
-    if not _ODBC.ok(rc) then
-      let diag = _DiagHelper.read(_ODBC.handle_stmt(), _hstmt)
+    if not ODBCConstants.ok(rc) then
+      let diag = _DiagHelper.read(ODBCConstants.handle_stmt(), _hstmt)
       return FetchError(DriverFetchError, diag)
     end
 
@@ -639,8 +628,8 @@ class ref Statement
     Unbinds columns so they can be rebound on next execute.
     """
     if _cursor_open then
-      @SQLFreeStmt(_hstmt, _ODBC.sql_close_cursor())
-      @SQLFreeStmt(_hstmt, _ODBC.sql_unbind())
+      @SQLFreeStmt(_hstmt, ODBCConstants.sql_close_cursor())
+      @SQLFreeStmt(_hstmt, ODBCConstants.sql_unbind())
       _cursor_open = false
       _col_bindings = None
     end
@@ -664,9 +653,9 @@ class ref Statement
     if _closed then return end
     if _conn_alive.is_alive() then
       if _cursor_open then
-        @SQLFreeStmt(_hstmt, _ODBC.sql_close_cursor())
+        @SQLFreeStmt(_hstmt, ODBCConstants.sql_close_cursor())
       end
-      @SQLFreeHandle(_ODBC.handle_stmt(), _hstmt)
+      @SQLFreeHandle(ODBCConstants.handle_stmt(), _hstmt)
     end
     _cursor_open = false
     _hstmt = Pointer[None]
@@ -675,7 +664,7 @@ class ref Statement
 
   fun _final() =>
     if (not _closed) and _conn_alive.is_alive() then
-      @SQLFreeHandle(_ODBC.handle_stmt(), _hstmt)
+      @SQLFreeHandle(ODBCConstants.handle_stmt(), _hstmt)
     end
 
 primitive Executed

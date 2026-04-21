@@ -79,7 +79,7 @@ primitive _DiagHelper
         _max_message_bytes().i16(),
         addressof msg_len)
 
-      if not _ODBC.ok(rc) then break end
+      if not ODBCConstants.ok(rc) then break end
 
       // Extract SQLSTATE (5 chars)
       let state: String val = state_buf.substring(0, 5)

@@ -1,10 +1,10 @@
-class val SqlTime
+class val SqlTime is SqlValue
   """
   SQL TIME. Hour (0-23), minute (0-59), second (0-59).
   """
-  let hour: U16
-  let minute: U16
-  let second: U16
+  var hour: U16
+  var minute: U16
+  var second: U16
 
   new val create(hour': U16, minute': U16, second': U16) =>
     hour = hour'
@@ -24,3 +24,11 @@ class val SqlTime
       s.append(second.string())
       s
     end
+
+  fun c_data_type(): I16 => ODBCConstants.c_type_time()
+
+  fun populate_buffer(buf: Array[U8])? =>
+    if false then error end
+    @memcpy(buf.cpointer(),  addressof hour, 2)
+    @memcpy(buf.cpointer(2), addressof minute, 2)
+    @memcpy(buf.cpointer(4), addressof second, 2)

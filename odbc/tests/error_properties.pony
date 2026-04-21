@@ -240,7 +240,7 @@ class iso _SqlValueRoundtripProperty is Property1[_SqlValueInput]
     let row = Row.create(consume cols)
     let ci = ColIndex(1)
 
-    match \exhaustive\ input.value
+    match input.value
     | SqlNull =>
       try ph.assert_true(row.is_null(ci)?)
       else ph.fail("is_null raised error") end

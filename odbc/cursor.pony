@@ -35,19 +35,19 @@ class ref Cursor
 
     let rc = @SQLFetch(_hstmt)
 
-    if rc == _ODBC.sql_no_data() then
+    if rc == ODBCConstants.sql_no_data() then
       return EndOfRows
     end
 
     _last_warnings =
-      if _ODBC.has_info(rc) then
-        Warnings(_DiagHelper.read(_ODBC.handle_stmt(), _hstmt))
+      if ODBCConstants.has_info(rc) then
+        Warnings(_DiagHelper.read(ODBCConstants.handle_stmt(), _hstmt))
       else
         None
       end
 
-    if not _ODBC.ok(rc) then
-      let diag = _DiagHelper.read(_ODBC.handle_stmt(), _hstmt)
+    if not ODBCConstants.ok(rc) then
+      let diag = _DiagHelper.read(ODBCConstants.handle_stmt(), _hstmt)
       return FetchError(DriverFetchError, diag)
     end
 
@@ -67,19 +67,19 @@ class ref Cursor
 
     let rc = @SQLFetch(_hstmt)
 
-    if rc == _ODBC.sql_no_data() then
+    if rc == ODBCConstants.sql_no_data() then
       return EndOfRows
     end
 
     _last_warnings =
-      if _ODBC.has_info(rc) then
-        Warnings(_DiagHelper.read(_ODBC.handle_stmt(), _hstmt))
+      if ODBCConstants.has_info(rc) then
+        Warnings(_DiagHelper.read(ODBCConstants.handle_stmt(), _hstmt))
       else
         None
       end
 
-    if not _ODBC.ok(rc) then
-      let diag = _DiagHelper.read(_ODBC.handle_stmt(), _hstmt)
+    if not ODBCConstants.ok(rc) then
+      let diag = _DiagHelper.read(ODBCConstants.handle_stmt(), _hstmt)
       return FetchError(DriverFetchError, diag)
     end
 
@@ -126,7 +126,7 @@ class ref Cursor
     """
     if _closed then return end
     if _conn_alive.is_alive() then
-      @SQLFreeHandle(_ODBC.handle_stmt(), _hstmt)
+      @SQLFreeHandle(ODBCConstants.handle_stmt(), _hstmt)
     end
     _hstmt = Pointer[None]
     _closed = true
@@ -134,5 +134,5 @@ class ref Cursor
 
   fun _final() =>
     if (not _closed) and _conn_alive.is_alive() then
-      @SQLFreeHandle(_ODBC.handle_stmt(), _hstmt)
+      @SQLFreeHandle(ODBCConstants.handle_stmt(), _hstmt)
     end

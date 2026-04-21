@@ -1,4 +1,4 @@
-class val SqlText
+class val SqlText is SqlValue
   """
   Wraps String val. Validated UTF-8 at the FFI boundary.
   """

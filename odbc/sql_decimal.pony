@@ -1,4 +1,4 @@
-class val SqlDecimal
+class val SqlDecimal is SqlValue
   """
   SQL NUMERIC/DECIMAL. Stored as string to preserve precision.
   """

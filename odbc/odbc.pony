@@ -45,8 +45,8 @@ primitive Odbc
     var henv: Pointer[None] tag = Pointer[None]
     var rc =
       @SQLAllocHandle(
-      _ODBC.handle_env(), _ODBC.null_handle(), addressof henv)
-    if not _ODBC.ok(rc) then
+      ODBCConstants.handle_env(), ODBCConstants.null_handle(), addressof henv)
+    if not ODBCConstants.ok(rc) then
       return ConnectError(
         EnvAllocFailed, recover val Array[DiagRecord] end)
     end
@@ -54,10 +54,10 @@ primitive Odbc
     // Set ODBC version
     rc =
       @SQLSetEnvAttr(
-      henv, _ODBC.attr_odbc_version(), _ODBC.ov_odbc3(), 0)
-    if not _ODBC.ok(rc) then
-      let diag = _DiagHelper.read(_ODBC.handle_env(), henv)
-      @SQLFreeHandle(_ODBC.handle_env(), henv)
+      henv, ODBCConstants.attr_odbc_version(), ODBCConstants.ov_odbc3(), 0)
+    if not ODBCConstants.ok(rc) then
+      let diag = _DiagHelper.read(ODBCConstants.handle_env(), henv)
+      @SQLFreeHandle(ODBCConstants.handle_env(), henv)
       return ConnectError(EnvAllocFailed, diag)
     end
 
@@ -65,10 +65,10 @@ primitive Odbc
     var hdbc: Pointer[None] tag = Pointer[None]
     rc =
       @SQLAllocHandle(
-      _ODBC.handle_dbc(), henv, addressof hdbc)
-    if not _ODBC.ok(rc) then
-      let diag = _DiagHelper.read(_ODBC.handle_env(), henv)
-      @SQLFreeHandle(_ODBC.handle_env(), henv)
+      ODBCConstants.handle_dbc(), henv, addressof hdbc)
+    if not ODBCConstants.ok(rc) then
+      let diag = _DiagHelper.read(ODBCConstants.handle_env(), henv)
+      @SQLFreeHandle(ODBCConstants.handle_env(), henv)
       return ConnectError(DbcAllocFailed, diag)
     end
 
@@ -78,25 +78,25 @@ primitive Odbc
     rc =
       @SQLDriverConnect(
       hdbc,
-      _ODBC.null_handle(),
+      ODBCConstants.null_handle(),
       conn_str.cpointer(),
       conn_str.size().i16(),
-      _ODBC.null_handle(),
+      ODBCConstants.null_handle(),
       0,
       addressof out_len,
-      _ODBC.driver_noprompt())
+      ODBCConstants.driver_noprompt())
 
-    if not _ODBC.ok(rc) then
-      let diag = _DiagHelper.read(_ODBC.handle_dbc(), hdbc)
-      @SQLFreeHandle(_ODBC.handle_dbc(), hdbc)
-      @SQLFreeHandle(_ODBC.handle_env(), henv)
+    if not ODBCConstants.ok(rc) then
+      let diag = _DiagHelper.read(ODBCConstants.handle_dbc(), hdbc)
+      @SQLFreeHandle(ODBCConstants.handle_dbc(), hdbc)
+      @SQLFreeHandle(ODBCConstants.handle_env(), henv)
       return ConnectError(DriverConnectFailed, diag)
     end
 
     // Collect any SQL_SUCCESS_WITH_INFO warnings
     let warnings: (Warnings | None) =
-      if _ODBC.has_info(rc) then
-        Warnings(_DiagHelper.read(_ODBC.handle_dbc(), hdbc))
+      if ODBCConstants.has_info(rc) then
+        Warnings(_DiagHelper.read(ODBCConstants.handle_dbc(), hdbc))
       else
         None
       end

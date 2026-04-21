@@ -1,4 +1,4 @@
-class val SqlTimestamp
+class val SqlTimestamp is SqlValue
   """
   SQL TIMESTAMP. Date + time + fractional seconds (nanoseconds).
   """
@@ -52,3 +52,4 @@ class val SqlTimestamp
       end
       s
     end
+
