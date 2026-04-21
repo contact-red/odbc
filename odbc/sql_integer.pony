@@ -11,7 +11,7 @@ class val SqlInteger is SqlValue
     value.string()
 
   fun c_data_type(): I16 => ODBCConstants.c_slong()
+  fun required_size(): USize => 4
 
-  fun populate_buffer(buf: Array[U8])? =>
-    if false then error end
+  fun populate_buffer(buf: Array[U8]) =>
     @memcpy(buf.cpointer(), addressof value, 4)

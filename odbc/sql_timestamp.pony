@@ -2,13 +2,13 @@ class val SqlTimestamp is SqlValue
   """
   SQL TIMESTAMP. Date + time + fractional seconds (nanoseconds).
   """
-  let year: I16
-  let month: U16
-  let day: U16
-  let hour: U16
-  let minute: U16
-  let second: U16
-  let fraction: U32
+  var year: I16
+  var month: U16
+  var day: U16
+  var hour: U16
+  var minute: U16
+  var second: U16
+  var fraction: U32
 
   new val create(
     year': I16,
@@ -53,3 +53,14 @@ class val SqlTimestamp is SqlValue
       s
     end
 
+  fun c_data_type(): I16 => ODBCConstants.c_type_timestamp()
+  fun required_size(): USize => ODBCConstants.timestamp_struct_size()
+
+  fun populate_buffer(buf: Array[U8]) =>
+    @memcpy(buf.cpointer(),   addressof year,     2)
+    @memcpy(buf.cpointer(2),  addressof month,    2)
+    @memcpy(buf.cpointer(4),  addressof day,      2)
+    @memcpy(buf.cpointer(6),  addressof hour,     2)
+    @memcpy(buf.cpointer(8),  addressof minute,   2)
+    @memcpy(buf.cpointer(10), addressof second,   2)
+    @memcpy(buf.cpointer(12), addressof fraction, 4)

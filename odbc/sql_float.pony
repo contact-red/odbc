@@ -12,7 +12,7 @@ class val SqlFloat is SqlValue
     value.string()
 
   fun c_data_type(): I16 => ODBCConstants.c_double()
+  fun required_size(): USize => 8
 
-  fun populate_buffer(buf: Array[U8])? =>
-    if false then error end
+  fun populate_buffer(buf: Array[U8]) =>
     @memcpy(buf.cpointer(), addressof value, 8)

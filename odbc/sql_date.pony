@@ -25,9 +25,9 @@ class val SqlDate is SqlValue
     end
 
   fun c_data_type(): I16 => ODBCConstants.c_type_date()
+  fun required_size(): USize => ODBCConstants.date_struct_size()
 
-  fun populate_buffer(buf: Array[U8])? =>
-    if false then error end
+  fun populate_buffer(buf: Array[U8]) =>
     @memcpy(buf.cpointer(),  addressof year, 2)
     @memcpy(buf.cpointer(2), addressof month, 2)
     @memcpy(buf.cpointer(4), addressof day, 2)

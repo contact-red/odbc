@@ -26,9 +26,9 @@ class val SqlTime is SqlValue
     end
 
   fun c_data_type(): I16 => ODBCConstants.c_type_time()
+  fun required_size(): USize => ODBCConstants.time_struct_size()
 
-  fun populate_buffer(buf: Array[U8])? =>
-    if false then error end
+  fun populate_buffer(buf: Array[U8]) =>
     @memcpy(buf.cpointer(),  addressof hour, 2)
     @memcpy(buf.cpointer(2), addressof minute, 2)
     @memcpy(buf.cpointer(4), addressof second, 2)

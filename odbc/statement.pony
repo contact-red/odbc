@@ -235,96 +235,21 @@ class ref Statement
     let pos = (idx - 1).usize()
 
     try
-      let buf = _param_bufs(pos)?
-
-      match v
-      | SqlNull =>
-        _param_inds(pos)?        = SqlNull.len_or_indptr()
-        _param_c_types(pos)?     = SqlNull.c_data_type()
-      | let sv: SqlBool =>
-        sv.populate_buffer(buf)?
-        _param_inds(pos)?        = sv.len_or_indptr()
-        _param_c_types(pos)?     = sv.c_data_type()
-      | let sv: SqlTinyInt =>
-        sv.populate_buffer(buf)?
-        _param_inds(pos)?        = sv.len_or_indptr()
-        _param_c_types(pos)?     = sv.c_data_type()
-      | let sv: SqlSmallInt =>
-        sv.populate_buffer(buf)?
-        _param_inds(pos)?        = sv.len_or_indptr()
-        _param_c_types(pos)?     = sv.c_data_type()
-      | let sv: SqlInteger =>
-        sv.populate_buffer(buf)?
-        _param_inds(pos)?        = sv.len_or_indptr()
-        _param_c_types(pos)?     = sv.c_data_type()
-      | let sv: SqlBigInt =>
-        sv.populate_buffer(buf)?
-        _param_inds(pos)?        = sv.len_or_indptr()
-        _param_c_types(pos)?     = sv.c_data_type()
-      | let sv: SqlFloat =>
-        sv.populate_buffer(buf)?
-        _param_inds(pos)?        = sv.len_or_indptr()
-        _param_c_types(pos)?     = sv.c_data_type()
-      | let sv: SqlText =>
-        let bytes = sv.value
-        let needed = bytes.size()
-        if needed > buf.size() then
+      let needed = v.required_size()
+      let buf =
+        if needed > _param_bufs(pos)?.size() then
           let new_buf = Array[U8].init(0, needed)
           _param_bufs(pos)? = new_buf
-          @memcpy(new_buf.cpointer(), bytes.cpointer(), needed)
-          _needs_rebind = true  // buffer address changed
-        else
-          @memcpy(buf.cpointer(), bytes.cpointer(), needed)
-        end
-        _param_inds(pos)? = needed.i64()
-        _param_c_types(pos)? = ODBCConstants.c_char()
-      | let sv: SqlDate =>
-        sv.populate_buffer(buf)?
-        _param_inds(pos)?        = sv.len_or_indptr()
-        _param_c_types(pos)?     = sv.c_data_type()
-      | let sv: SqlTime =>
-        sv.populate_buffer(buf)?
-        _param_inds(pos)?        = sv.len_or_indptr()
-        _param_c_types(pos)?     = sv.c_data_type()
-      | let sv: SqlTimestamp =>
-        let needed: USize = ODBCConstants.timestamp_struct_size()
-        let tbuf =
-          if needed > buf.size() then
-            let new_buf = Array[U8].init(0, needed)
-            _param_bufs(pos)? = new_buf
-            _needs_rebind = true
-            new_buf
-          else
-            buf
-          end
-        var yr = sv.year; var mo = sv.month; var dy = sv.day
-        var hr = sv.hour; var mi = sv.minute; var se = sv.second
-        var fr = sv.fraction
-        @memcpy(tbuf.cpointer(), addressof yr, 2)
-        @memcpy(tbuf.cpointer(2), addressof mo, 2)
-        @memcpy(tbuf.cpointer(4), addressof dy, 2)
-        @memcpy(tbuf.cpointer(6), addressof hr, 2)
-        @memcpy(tbuf.cpointer(8), addressof mi, 2)
-        @memcpy(tbuf.cpointer(10), addressof se, 2)
-        @memcpy(tbuf.cpointer(12), addressof fr, 4)
-        _param_inds(pos)? = 0
-        _param_c_types(pos)? = ODBCConstants.c_type_timestamp()
-      | let sv: SqlDecimal =>
-        let bytes = sv.value
-        let needed = bytes.size()
-        if needed > buf.size() then
-          let new_buf = Array[U8].init(0, needed)
-          _param_bufs(pos)? = new_buf
-          @memcpy(new_buf.cpointer(), bytes.cpointer(), needed)
           _needs_rebind = true
+          new_buf
         else
-          @memcpy(buf.cpointer(), bytes.cpointer(), needed)
+          _param_bufs(pos)?
         end
-        _param_inds(pos)? = needed.i64()
-        _param_c_types(pos)? = ODBCConstants.c_char()
-      end
 
-      _bound_flags(pos)? = true
+      v.populate_buffer(buf)
+      _param_inds(pos)?    = v.len_or_indptr()
+      _param_c_types(pos)? = v.c_data_type()
+      _bound_flags(pos)?   = true
     else
       return BindError(ParamIndexOutOfRange, i)
     end

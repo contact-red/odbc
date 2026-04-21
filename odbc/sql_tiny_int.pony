@@ -11,6 +11,7 @@ class val SqlTinyInt is SqlValue
     value.string()
 
   fun c_data_type(): I16 => ODBCConstants.c_stinyint()
-  fun populate_buffer(buf: Array[U8])? =>
-    if false then error end
+  fun required_size(): USize => 1
+
+  fun populate_buffer(buf: Array[U8]) =>
     @memcpy(buf.cpointer(), addressof value, 1)
