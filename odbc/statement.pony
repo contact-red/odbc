@@ -7,16 +7,16 @@ class ref Statement
   var _hstmt: Pointer[None] tag
   let _param_count: U16
   let _conn_alive: _AliveFlag ref
-  var _closed: Bool
-  var _cursor_open: Bool
-  var _last_warnings: (Warnings | None)
+  var _closed: Bool = false
+  var _cursor_open: Bool = false
+  var _last_warnings: (Warnings | None) = None
   let _bound_flags: Array[Bool] ref
   let _param_bufs: Array[Array[U8]] ref
   let _param_inds: Array[I64] ref
   let _param_c_types: Array[I16] ref
-  var _params_bound_to_odbc: Bool
-  var _needs_rebind: Bool
-  var _col_bindings: (_ColumnBindings | None)
+  var _params_bound_to_odbc: Bool = false
+  var _needs_rebind: Bool = false
+  var _col_bindings: (_ColumnBindings | None) = None
   let _opts: OdbcOptions
 
   new ref _create(
@@ -28,12 +28,6 @@ class ref Statement
     _hstmt = hstmt
     _param_count = param_count
     _conn_alive = conn_alive
-    _closed = false
-    _cursor_open = false
-    _last_warnings = None
-    _params_bound_to_odbc = false
-    _needs_rebind = false
-    _col_bindings = None
     _opts = opts
 
     let n = param_count.usize()
@@ -683,3 +677,18 @@ class ref Statement
     if (not _closed) and _conn_alive.is_alive() then
       @SQLFreeHandle(_ODBC.handle_stmt(), _hstmt)
     end
+
+primitive Executed
+  """
+  Statement executed successfully (cursor opened for fetching).
+  """
+
+primitive Bound
+  """
+  Parameter value bound successfully.
+  """
+
+primitive EndOfRows
+  """
+  Returned by fetch() when no more rows are available.
+  """
