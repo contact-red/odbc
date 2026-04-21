@@ -11,6 +11,7 @@ class val SqlDecimal is SqlValue
     value.string()
 
   fun c_data_type(): I16 => ODBCConstants.c_char()
+  fun sql_type(): I16 => ODBCConstants.sql_decimal()
   fun required_size(): USize => value.size()
   fun len_or_indptr(): I64 => value.size().i64()
 
