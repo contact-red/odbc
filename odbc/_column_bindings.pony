@@ -319,60 +319,44 @@ class ref _ColumnBindings
   fun ref _get_long_text(i: USize): (String val | FetchError) =>
     """
     Retrieve full text for column i when the bound buffer was too small.
-    Concatenates the head (from the bound buffer) with the remainder
-    retrieved via SQLGetData.
 
-    Uses a tail buffer sized to exactly the remaining bytes plus one for
-    the null terminator. This is load-bearing: psqlODBC returns the
-    post-bind tail when the buffer can hold only the tail, but returns
-    the full value from the start when given a significantly larger
-    buffer — so a generous chunk size would corrupt the result.
+    Discards the partial head already written into the bound buffer and
+    reads the whole value via a single SQLGetData call into a freshly
+    allocated buffer sized to the full length. psqlODBC returns the full
+    column value from byte 0 on SQLGetData regardless of prior bind
+    progress, so reassembling head+tail is unsafe — the "tail" bytes are
+    actually a duplicate of the prefix.
     """
     try
-      let tbuf = _text_bufs(i)?
       let total_len = _indicators(i)?.usize()
-      // Bound buffer holds tbuf.size()-1 data bytes (last is null terminator)
-      let head_len = tbuf.size() - 1
-
       if total_len > _opts.max_column_bytes() then
         return FetchError(ColumnTooLarge)
       end
 
-      // Head: data already written into the bound buffer by SQLFetch
-      let head: String val = tbuf.substring(0, head_len.isize())
-
-      // Tail: retrieve remaining bytes via SQLGetData. Per ODBC spec,
-      // after SQLFetch with a bound column, SQLGetData returns data
-      // starting after the last byte returned by the bind.
-      let remaining = total_len - head_len
-      let tail_buf: String ref = String(remaining + 1)
+      let buf: String ref = String(total_len + 1)
       var j: USize = 0
-      while j < (remaining + 1) do tail_buf.push(0); j = j + 1 end
+      while j < (total_len + 1) do buf.push(0); j = j + 1 end
 
-      var tail_ind: I64 = 0
-      let col_num = (i + 1).u16()
-      let tail_buf_len = (remaining + 1).i64()
+      var ind: I64 = 0
       let rc =
         @SQLGetData(
         _hstmt,
-        col_num,
+        (i + 1).u16(),
         _ODBC.c_char(),
-        tail_buf.cpointer(),
-        tail_buf_len,
-        addressof tail_ind)
+        buf.cpointer(),
+        (total_len + 1).i64(),
+        addressof ind)
 
       if not _ODBC.ok(rc) then
         return FetchError(DriverFetchError)
       end
 
-      let tail_len: USize =
-        if tail_ind == _ODBC.sql_null_data() then 0
-        elseif tail_ind < 0 then 0
-        else tail_ind.usize().min(remaining)
+      let len: USize =
+        if ind == _ODBC.sql_null_data() then 0
+        elseif ind < 0 then 0
+        else ind.usize().min(total_len)
         end
-      let tail: String val = tail_buf.substring(0, tail_len.isize())
-
-      head + tail
+      buf.substring(0, len.isize())
     else
       FetchError(DriverFetchError)
     end
