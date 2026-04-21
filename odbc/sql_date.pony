@@ -5,11 +5,21 @@ class val SqlDate is SqlValue
   var year: I16
   var month: U16
   var day: U16
+  let _buf: Array[U8] val
 
   new val create(year': I16, month': U16, day': U16) =>
     year = year'
     month = month'
     day = day'
+    _buf =
+      recover val
+        var y = year'; var m = month'; var d = day'
+        let b = Array[U8].init(0, ODBCConstants.date_struct_size())
+        @memcpy(b.cpointer(),  addressof y, 2)
+        @memcpy(b.cpointer(2), addressof m, 2)
+        @memcpy(b.cpointer(4), addressof d, 2)
+        b
+      end
 
   fun string(): String iso^ =>
     recover iso
@@ -25,9 +35,17 @@ class val SqlDate is SqlValue
     end
 
   fun c_data_type(): I16 => ODBCConstants.c_type_date()
-  fun required_size(): USize => ODBCConstants.date_struct_size()
 
-  fun populate_buffer(buf: Array[U8]) =>
-    @memcpy(buf.cpointer(),  addressof year, 2)
-    @memcpy(buf.cpointer(2), addressof month, 2)
-    @memcpy(buf.cpointer(4), addressof day, 2)
+  fun bind_to_odbc(
+    hstmt: Pointer[None] tag,
+    param_num: U16,
+    ind_ptr: Pointer[I64] tag)
+    : I16
+  =>
+    @SQLBindParameter(
+      hstmt, param_num,
+      ODBCConstants.sql_param_input(),
+      c_data_type(), sql_type(),
+      U64(0), I16(0),
+      _buf.cpointer(), _buf.size().i64(),
+      ind_ptr)

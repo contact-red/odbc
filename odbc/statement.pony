@@ -11,7 +11,10 @@ class ref Statement
   var _cursor_open: Bool = false
   var _last_warnings: (Warnings | None) = None
   let _bound_flags: Array[Bool] ref
-  let _param_bufs: Array[Array[U8]] ref
+  // Bound SqlValue per slot. Each value owns its own storage; Statement
+  // retains the reference so the pointer captured by SQLBindParameter
+  // stays valid until the next rebind on that slot or close().
+  let _params: Array[(SqlValue | None)] ref
   let _param_inds: Array[I64] ref
   var _col_bindings: (_ColumnBindings | None) = None
   let _opts: OdbcOptions
@@ -29,13 +32,8 @@ class ref Statement
 
     let n = param_count.usize()
     _bound_flags = Array[Bool].init(false, n)
-    _param_bufs = Array[Array[U8]](n)
+    _params = Array[(SqlValue | None)].init(None, n)
     _param_inds = Array[I64].init(0, n)
-    var i: USize = 0
-    while i < n do
-      _param_bufs.push(Array[U8].init(0, 8))
-      i = i + 1
-    end
 
   fun ref _check_alive(): (None | ExecError) =>
     if _closed then
@@ -214,7 +212,9 @@ class ref Statement
 
   fun ref bind(i: ParamIndex, v: SqlValue): (Bound | BindError) =>
     """
-    Write value into parameter scratch slot. Atomic per param.
+    Bind a value to a parameter slot. Each call replaces any previous
+    binding on the slot — the prior SqlValue is released and the new one
+    is retained for the lifetime of the binding.
     """
     if _closed then
       return BindError(BindStatementClosed, i)
@@ -231,22 +231,16 @@ class ref Statement
     let pos = (idx - 1).usize()
 
     try
-      let needed = v.required_size()
-      let buf =
-        if needed > _param_bufs(pos)?.size() then
-          let new_buf = Array[U8].init(0, needed)
-          _param_bufs(pos)? = new_buf
-          new_buf
-        else
-          _param_bufs(pos)?
-        end
-
-      v.populate_buffer(buf)
+      // Retain v before ODBC captures a pointer into its storage so the
+      // backing memory outlives this method and the next SQLExecute.
+      _params(pos)? = v
       _param_inds(pos)? = v.len_or_indptr()
 
-      let rc = v.bind_to_odbc(_hstmt, idx, buf, _param_inds.cpointer(pos))
+      let rc = v.bind_to_odbc(_hstmt, idx, _param_inds.cpointer(pos))
       if not ODBCConstants.ok(rc) then
         let diag = _DiagHelper.read(ODBCConstants.handle_stmt(), _hstmt)
+        _params(pos)? = None
+        _bound_flags(pos)? = false
         return BindError(DriverRejected, i, diag)
       end
 

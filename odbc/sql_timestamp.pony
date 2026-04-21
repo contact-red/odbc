@@ -9,6 +9,7 @@ class val SqlTimestamp is SqlValue
   var minute: U16
   var second: U16
   var fraction: U32
+  let _buf: Array[U8] val
 
   new val create(
     year': I16,
@@ -26,6 +27,21 @@ class val SqlTimestamp is SqlValue
     minute = minute'
     second = second'
     fraction = fraction'
+    _buf =
+      recover val
+        var y = year';   var mo = month';  var d = day'
+        var h = hour';   var mi = minute'; var s = second'
+        var f = fraction'
+        let b = Array[U8].init(0, ODBCConstants.timestamp_struct_size())
+        @memcpy(b.cpointer(),    addressof y,  2)
+        @memcpy(b.cpointer(2),   addressof mo, 2)
+        @memcpy(b.cpointer(4),   addressof d,  2)
+        @memcpy(b.cpointer(6),   addressof h,  2)
+        @memcpy(b.cpointer(8),   addressof mi, 2)
+        @memcpy(b.cpointer(10),  addressof s,  2)
+        @memcpy(b.cpointer(12),  addressof f,  4)
+        b
+      end
 
   fun string(): String iso^ =>
     recover iso
@@ -54,13 +70,17 @@ class val SqlTimestamp is SqlValue
     end
 
   fun c_data_type(): I16 => ODBCConstants.c_type_timestamp()
-  fun required_size(): USize => ODBCConstants.timestamp_struct_size()
 
-  fun populate_buffer(buf: Array[U8]) =>
-    @memcpy(buf.cpointer(),   addressof year,     2)
-    @memcpy(buf.cpointer(2),  addressof month,    2)
-    @memcpy(buf.cpointer(4),  addressof day,      2)
-    @memcpy(buf.cpointer(6),  addressof hour,     2)
-    @memcpy(buf.cpointer(8),  addressof minute,   2)
-    @memcpy(buf.cpointer(10), addressof second,   2)
-    @memcpy(buf.cpointer(12), addressof fraction, 4)
+  fun bind_to_odbc(
+    hstmt: Pointer[None] tag,
+    param_num: U16,
+    ind_ptr: Pointer[I64] tag)
+    : I16
+  =>
+    @SQLBindParameter(
+      hstmt, param_num,
+      ODBCConstants.sql_param_input(),
+      c_data_type(), sql_type(),
+      U64(0), I16(0),
+      _buf.cpointer(), _buf.size().i64(),
+      ind_ptr)

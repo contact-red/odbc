@@ -1,6 +1,7 @@
 class val SqlDecimal is SqlValue
   """
-  SQL NUMERIC/DECIMAL. Stored as string to preserve precision.
+  SQL NUMERIC/DECIMAL. Stored as string to preserve precision; binds
+  zero-copy out of the String's backing buffer.
   """
   let value: String val
 
@@ -12,8 +13,20 @@ class val SqlDecimal is SqlValue
 
   fun c_data_type(): I16 => ODBCConstants.c_char()
   fun sql_type(): I16 => ODBCConstants.sql_decimal()
-  fun required_size(): USize => value.size()
   fun len_or_indptr(): I64 => value.size().i64()
 
-  fun populate_buffer(buf: Array[U8]) =>
-    @memcpy(buf.cpointer(), value.cpointer(), value.size())
+  fun bind_to_odbc(
+    hstmt: Pointer[None] tag,
+    param_num: U16,
+    ind_ptr: Pointer[I64] tag)
+    : I16
+  =>
+    let n = value.size()
+    let col_size: U64 = if n > 0 then n.u64() else 1 end
+    @SQLBindParameter(
+      hstmt, param_num,
+      ODBCConstants.sql_param_input(),
+      c_data_type(), sql_type(),
+      col_size, I16(0),
+      value.cpointer(), n.i64(),
+      ind_ptr)

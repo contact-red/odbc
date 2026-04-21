@@ -2,17 +2,21 @@ trait val SqlValue
   """
   A value that can be bound to a prepared statement parameter slot.
 
-  Statement owns the per-parameter scratch buffer and grows it when
-  `required_size()` exceeds the current capacity. On each bind, Statement
-  asks the value to populate that buffer and then to bind itself to the
-  driver via `bind_to_odbc()`.
+  Each `SqlValue` owns its own storage — a fixed-width type points ODBC at
+  `addressof self.value`, a text/decimal points at its `String`'s
+  `cpointer()`, and composite types (date/time/timestamp) hold a packed
+  `Array[U8]` buffer. Statement keeps the bound `SqlValue` alive until
+  the next rebind so the pointer registered with `SQLBindParameter`
+  remains valid for `SQLExecute`.
 
-  Custom types typically only need to supply `c_data_type()`, `sql_type()`,
-  `required_size()`, `populate_buffer()`, and (for variable-width types)
-  `len_or_indptr()`. The default `bind_to_odbc()` wires those through
-  `SQLBindParameter` correctly for standard input parameters. Override it
-  only for non-standard binding protocols (e.g. `SQL_DATA_AT_EXEC`,
-  output parameters, unusual `col_size` rules).
+  Custom types typically only need to supply `c_data_type()` and
+  `bind_to_odbc()`. `sql_type()` has a default mapping; override for
+  types where the C and SQL types differ (e.g. DECIMAL carried as CHAR).
+
+  `bind_to_odbc()` must call `@SQLBindParameter` directly — Pony's
+  `addressof` operator is only usable in FFI argument positions, so
+  no primitive helper can hide the FFI call for fixed-width types that
+  bind via `addressof self.value`.
   """
   fun c_data_type(): I16
 
@@ -35,57 +39,10 @@ trait val SqlValue
     else ODBCConstants.sql_varchar()
     end
 
-  fun required_size(): USize => 0
-  fun populate_buffer(buf: Array[U8]) => None
   fun len_or_indptr(): I64 => 0
 
   fun bind_to_odbc(
     hstmt: Pointer[None] tag,
     param_num: U16,
-    buf: Array[U8],
     ind_ptr: Pointer[I64] tag)
     : I16
-  =>
-    """
-    Default: bind the parameter as a standard ODBC input parameter.
-    `col_size` follows ODBC's convention — the byte length for character
-    data (minimum 1), zero for fixed-width types.
-    """
-    let c_type = c_data_type()
-    let col_size: U64 =
-      if c_type == ODBCConstants.c_char() then
-        let ind = len_or_indptr()
-        if ind > 0 then ind.u64() else 1 end
-      else
-        0
-      end
-    _SqlBindParameter(
-      hstmt, param_num, c_type, sql_type(), col_size, buf, ind_ptr)
-
-primitive _SqlBindParameter
-  """
-  Thin wrapper around @SQLBindParameter. Exists because Pony forbids FFI
-  calls directly from trait default methods; calling a primitive helper
-  that makes the FFI call is allowed.
-  """
-  fun apply(
-    hstmt: Pointer[None] tag,
-    param_num: U16,
-    c_type: I16,
-    sql_type: I16,
-    col_size: U64,
-    buf: Array[U8],
-    ind_ptr: Pointer[I64] tag)
-    : I16
-  =>
-    @SQLBindParameter(
-      hstmt,
-      param_num,
-      ODBCConstants.sql_param_input(),
-      c_type,
-      sql_type,
-      col_size,
-      0,
-      buf.cpointer(),
-      buf.size().i64(),
-      ind_ptr)
