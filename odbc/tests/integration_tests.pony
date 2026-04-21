@@ -899,6 +899,19 @@ class iso _BindDateTimeDecimalTest is UnitTest
       conn.close()
     end
 
+primitive _LargeTextByte
+  """
+  Non-periodic printable-ASCII byte for test position j. A periodic
+  generator (e.g. `'a' + j%26`) hides shift/duplicate bugs in the
+  SQLGetData fallback, because `result[k] == result[k + p]` whenever p
+  is a multiple of the period. Knuth's multiplicative hash gives a
+  sequence with no short period over the ranges we test.
+  """
+  fun apply(j: USize): U8 =>
+    // 2654435769 is 2^32/phi, Knuth's well-known multiplicative constant.
+    let h = j.u64() * 2654435769
+    U8(0x20) + ((h xor (h >> 17)) % 95).u8()
+
 class iso _LargeTextRoundtripTest is UnitTest
   fun name(): String => "integration: large text roundtrip at various sizes"
 
@@ -924,8 +937,7 @@ class iso _LargeTextRoundtripTest is UnitTest
               let s = String(sz)
               var j: USize = 0
               while j < sz do
-                // Rotating printable ASCII (a-z)
-                s.push(U8(0x61) + (j % 26).u8())
+                s.push(_LargeTextByte(j))
                 j = j + 1
               end
               s
@@ -971,17 +983,26 @@ class iso _LargeTextRoundtripTest is UnitTest
                 text.size(),
                 "size mismatch for sz=" + sz.string())
 
-              // Verify first and last bytes match expected pattern
+              // Verify every byte matches the generator output. Full-content
+              // comparison catches shift/duplicate bugs anywhere in the value;
+              // spot-checking endpoints would miss a middle-of-string tail
+              // corruption like the one this pattern is designed to expose.
               try
-                h.assert_eq[U8](
-                  U8(0x61),
-                  text(0)?,
-                  "first byte wrong for sz=" + sz.string())
-                let last_expected = U8(0x61) + ((sz - 1) % 26).u8()
-                h.assert_eq[U8](
-                  last_expected,
-                  text(sz - 1)?,
-                  "last byte wrong for sz=" + sz.string())
+                var j: USize = 0
+                var first_diff: USize = sz // sentinel: means no diff
+                while j < sz do
+                  if text(j)? != _LargeTextByte(j) then
+                    first_diff = j
+                    break
+                  end
+                  j = j + 1
+                end
+                if first_diff < sz then
+                  h.fail("content mismatch for sz=" + sz.string()
+                    + " at offset " + first_diff.string()
+                    + ": got=" + text(first_diff)?.string()
+                    + " want=" + _LargeTextByte(first_diff).string())
+                end
               else
                 h.fail("byte access error for sz=" + sz.string())
               end
