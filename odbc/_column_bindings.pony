@@ -66,22 +66,22 @@ class ref _ColumnBindings
       // Map SQL type to C type
       let c_type: I16 =
         match data_type
-        | _ODBC.sql_bit() => _ODBC.c_bit()
-        | _ODBC.sql_tinyint() => _ODBC.c_stinyint()
-        | _ODBC.sql_smallint() => _ODBC.c_sshort()
-        | _ODBC.sql_integer() => _ODBC.c_slong()
-        | _ODBC.sql_bigint() => _ODBC.c_sbigint()
-        | _ODBC.sql_real() => _ODBC.c_double()
-        | _ODBC.sql_float() => _ODBC.c_double()
-        | _ODBC.sql_double() => _ODBC.c_double()
-        | _ODBC.sql_char() => _ODBC.c_char()
-        | _ODBC.sql_varchar() => _ODBC.c_char()
-        | _ODBC.sql_longvarchar() => _ODBC.c_char()
-        | _ODBC.sql_type_date() => _ODBC.c_type_date()
-        | _ODBC.sql_type_time() => _ODBC.c_type_time()
-        | _ODBC.sql_type_timestamp() => _ODBC.c_type_timestamp()
-        | _ODBC.sql_numeric() => _ODBC.c_char()
-        | _ODBC.sql_decimal() => _ODBC.c_char()
+        | ODBCConstants.sql_bit() => ODBCConstants.c_bit()
+        | ODBCConstants.sql_tinyint() => ODBCConstants.c_stinyint()
+        | ODBCConstants.sql_smallint() => ODBCConstants.c_sshort()
+        | ODBCConstants.sql_integer() => ODBCConstants.c_slong()
+        | ODBCConstants.sql_bigint() => ODBCConstants.c_sbigint()
+        | ODBCConstants.sql_real() => ODBCConstants.c_double()
+        | ODBCConstants.sql_float() => ODBCConstants.c_double()
+        | ODBCConstants.sql_double() => ODBCConstants.c_double()
+        | ODBCConstants.sql_char() => ODBCConstants.c_char()
+        | ODBCConstants.sql_varchar() => ODBCConstants.c_char()
+        | ODBCConstants.sql_longvarchar() => ODBCConstants.c_char()
+        | ODBCConstants.sql_type_date() => ODBCConstants.c_type_date()
+        | ODBCConstants.sql_type_time() => ODBCConstants.c_type_time()
+        | ODBCConstants.sql_type_timestamp() => ODBCConstants.c_type_timestamp()
+        | ODBCConstants.sql_numeric() => ODBCConstants.c_char()
+        | ODBCConstants.sql_decimal() => ODBCConstants.c_char()
         else
         // Unsupported type — don't bind, will produce FetchError
         _c_types.push(0)
@@ -96,7 +96,7 @@ class ref _ColumnBindings
       _c_types.push(c_type)
       _is_unsupported.push(false)
 
-      if c_type == _ODBC.c_char() then
+      if c_type == ODBCConstants.c_char() then
         // Text column: allocate buffer based on declared col_size, capped.
         // Floor at 4096 — some drivers report col_size=0 for TEXT/LONGVARCHAR.
         let buf_size =
@@ -118,18 +118,18 @@ class ref _ColumnBindings
           tbuf.cpointer(),
           buf_size.i64(),
           _indicators.cpointer(pos))
-        if not _ODBC.ok(rc) then error end
+        if not ODBCConstants.ok(rc) then error end
       else
         // Fixed-width column
         let fsize: USize =
-          if c_type == _ODBC.c_bit() then 1
-          elseif c_type == _ODBC.c_type_date() then _ODBC.date_struct_size()
-          elseif c_type == _ODBC.c_type_time() then _ODBC.time_struct_size()
-          elseif c_type == _ODBC.c_type_timestamp() then
-            _ODBC.timestamp_struct_size()
-          elseif c_type == _ODBC.c_stinyint() then 1
-          elseif c_type == _ODBC.c_sshort() then 2
-          elseif c_type == _ODBC.c_slong() then 4
+          if c_type == ODBCConstants.c_bit() then 1
+          elseif c_type == ODBCConstants.c_type_date() then ODBCConstants.date_struct_size()
+          elseif c_type == ODBCConstants.c_type_time() then ODBCConstants.time_struct_size()
+          elseif c_type == ODBCConstants.c_type_timestamp() then
+            ODBCConstants.timestamp_struct_size()
+          elseif c_type == ODBCConstants.c_stinyint() then 1
+          elseif c_type == ODBCConstants.c_sshort() then 2
+          elseif c_type == ODBCConstants.c_slong() then 4
           else 8 // 8 covers I64 and F64
           end
         let fbuf = Array[U8].init(0, fsize)
@@ -147,7 +147,7 @@ class ref _ColumnBindings
           fbuf.cpointer(),
           fsize.i64(),
           _indicators.cpointer(pos))
-        if not _ODBC.ok(rc) then error end
+        if not ODBCConstants.ok(rc) then error end
       end
 
       col = col + 1
@@ -202,7 +202,7 @@ class ref _ColumnBindings
 
       let ind = _indicators(i)?
 
-      if ind == _ODBC.sql_null_data() then
+      if ind == ODBCConstants.sql_null_data() then
         return SqlNull
       elseif _is_text(i)? then
         let tbuf = _text_bufs(i)?
@@ -221,8 +221,8 @@ class ref _ColumnBindings
         end
 
         let sql_type = _sql_types(i)?
-        if (sql_type == _ODBC.sql_numeric())
-          or (sql_type == _ODBC.sql_decimal())
+        if (sql_type == ODBCConstants.sql_numeric())
+          or (sql_type == ODBCConstants.sql_decimal())
         then
           return SqlDecimal(text)
         else
@@ -235,41 +235,41 @@ class ref _ColumnBindings
         let fbuf = _fixed_bufs(i)?
         let c_type = _c_types(i)?
 
-        if c_type == _ODBC.c_stinyint() then
+        if c_type == ODBCConstants.c_stinyint() then
           var value: I8 = 0
           @memcpy(addressof value, fbuf.cpointer(), 1)
           return SqlTinyInt(value)
-        elseif c_type == _ODBC.c_sshort() then
+        elseif c_type == ODBCConstants.c_sshort() then
           var value: I16 = 0
           @memcpy(addressof value, fbuf.cpointer(), 2)
           return SqlSmallInt(value)
-        elseif c_type == _ODBC.c_slong() then
+        elseif c_type == ODBCConstants.c_slong() then
           var value: I32 = 0
           @memcpy(addressof value, fbuf.cpointer(), 4)
           return SqlInteger(value)
-        elseif c_type == _ODBC.c_sbigint() then
+        elseif c_type == ODBCConstants.c_sbigint() then
           var value: I64 = 0
           @memcpy(addressof value, fbuf.cpointer(), 8)
           return SqlBigInt(value)
-        elseif c_type == _ODBC.c_double() then
+        elseif c_type == ODBCConstants.c_double() then
           var value: F64 = 0
           @memcpy(addressof value, fbuf.cpointer(), 8)
           return SqlFloat(value)
-        elseif c_type == _ODBC.c_bit() then
+        elseif c_type == ODBCConstants.c_bit() then
           return SqlBool(try fbuf(0)? != 0 else false end)
-        elseif c_type == _ODBC.c_type_date() then
+        elseif c_type == ODBCConstants.c_type_date() then
           var yr: I16 = 0; var mo: U16 = 0; var dy: U16 = 0
           @memcpy(addressof yr, fbuf.cpointer(), 2)
           @memcpy(addressof mo, fbuf.cpointer(2), 2)
           @memcpy(addressof dy, fbuf.cpointer(4), 2)
           return SqlDate(yr, mo, dy)
-        elseif c_type == _ODBC.c_type_time() then
+        elseif c_type == ODBCConstants.c_type_time() then
           var hr: U16 = 0; var mi: U16 = 0; var se: U16 = 0
           @memcpy(addressof hr, fbuf.cpointer(), 2)
           @memcpy(addressof mi, fbuf.cpointer(2), 2)
           @memcpy(addressof se, fbuf.cpointer(4), 2)
           return SqlTime(hr, mi, se)
-        elseif c_type == _ODBC.c_type_timestamp() then
+        elseif c_type == ODBCConstants.c_type_timestamp() then
           var yr: I16 = 0; var mo: U16 = 0; var dy: U16 = 0
           var hr: U16 = 0; var mi: U16 = 0; var se: U16 = 0
           var fr: U32 = 0
@@ -342,17 +342,17 @@ class ref _ColumnBindings
         @SQLGetData(
         _hstmt,
         (i + 1).u16(),
-        _ODBC.c_char(),
+        ODBCConstants.c_char(),
         buf.cpointer(),
         (total_len + 1).i64(),
         addressof ind)
 
-      if not _ODBC.ok(rc) then
+      if not ODBCConstants.ok(rc) then
         return FetchError(DriverFetchError)
       end
 
       let len: USize =
-        if ind == _ODBC.sql_null_data() then 0
+        if ind == ODBCConstants.sql_null_data() then 0
         elseif ind < 0 then 0
         else ind.usize().min(total_len)
         end

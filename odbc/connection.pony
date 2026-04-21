@@ -1,82 +1,3 @@
-primitive Odbc
-  """
-  Entry point for ODBC connections.
-  """
-
-  fun connect(
-    dsn: Dsn,
-    opts: OdbcOptions = OdbcOptions)
-    : (Connection | ConnectError)
-  =>
-    """
-    Connect to an ODBC data source. Each Connection owns its own
-    SQLHENV (no shared environment handle across connections).
-    OdbcOptions carries UTF-8 validation and per-column size limits;
-    see its definition for defaults.
-    """
-
-    // Allocate environment handle
-    var henv: Pointer[None] tag = Pointer[None]
-    var rc =
-      @SQLAllocHandle(
-      _ODBC.handle_env(), _ODBC.null_handle(), addressof henv)
-    if not _ODBC.ok(rc) then
-      return ConnectError(
-        EnvAllocFailed, recover val Array[DiagRecord] end)
-    end
-
-    // Set ODBC version
-    rc =
-      @SQLSetEnvAttr(
-      henv, _ODBC.attr_odbc_version(), _ODBC.ov_odbc3(), 0)
-    if not _ODBC.ok(rc) then
-      let diag = _DiagHelper.read(_ODBC.handle_env(), henv)
-      @SQLFreeHandle(_ODBC.handle_env(), henv)
-      return ConnectError(EnvAllocFailed, diag)
-    end
-
-    // Allocate connection handle
-    var hdbc: Pointer[None] tag = Pointer[None]
-    rc =
-      @SQLAllocHandle(
-      _ODBC.handle_dbc(), henv, addressof hdbc)
-    if not _ODBC.ok(rc) then
-      let diag = _DiagHelper.read(_ODBC.handle_env(), henv)
-      @SQLFreeHandle(_ODBC.handle_env(), henv)
-      return ConnectError(DbcAllocFailed, diag)
-    end
-
-    // Connect
-    let conn_str = dsn._string()
-    var out_len: I16 = 0
-    rc =
-      @SQLDriverConnect(
-      hdbc,
-      _ODBC.null_handle(),
-      conn_str.cpointer(),
-      conn_str.size().i16(),
-      _ODBC.null_handle(),
-      0,
-      addressof out_len,
-      _ODBC.driver_noprompt())
-
-    if not _ODBC.ok(rc) then
-      let diag = _DiagHelper.read(_ODBC.handle_dbc(), hdbc)
-      @SQLFreeHandle(_ODBC.handle_dbc(), hdbc)
-      @SQLFreeHandle(_ODBC.handle_env(), henv)
-      return ConnectError(DriverConnectFailed, diag)
-    end
-
-    // Collect any SQL_SUCCESS_WITH_INFO warnings
-    let warnings: (Warnings | None) =
-      if _ODBC.has_info(rc) then
-        Warnings(_DiagHelper.read(_ODBC.handle_dbc(), hdbc))
-      else
-        None
-      end
-
-    Connection._create(henv, hdbc, warnings, opts)
-
 class ref Connection
   """
   Non-sendable database connection wrapping SQLHDBC (and its own SQLHENV).
@@ -119,9 +40,9 @@ class ref Connection
     var hstmt: Pointer[None] tag = Pointer[None]
     var rc =
       @SQLAllocHandle(
-      _ODBC.handle_stmt(), _hdbc, addressof hstmt)
-    if not _ODBC.ok(rc) then
-      let diag = _DiagHelper.read(_ODBC.handle_dbc(), _hdbc)
+      ODBCConstants.handle_stmt(), _hdbc, addressof hstmt)
+    if not ODBCConstants.ok(rc) then
+      let diag = _DiagHelper.read(ODBCConstants.handle_dbc(), _hdbc)
       return ExecError(
         ExecErrorClassifier.classify(diag), diag, sql)
     end
@@ -132,16 +53,16 @@ class ref Connection
 
     // Capture warnings before anything else
     _last_warnings =
-      if _ODBC.has_info(rc) then
+      if ODBCConstants.has_info(rc) then
         Warnings(
-          _DiagHelper.read(_ODBC.handle_stmt(), hstmt))
+          _DiagHelper.read(ODBCConstants.handle_stmt(), hstmt))
       else
         None
       end
 
-    if not _ODBC.ok(rc) then
-      let diag = _DiagHelper.read(_ODBC.handle_stmt(), hstmt)
-      @SQLFreeHandle(_ODBC.handle_stmt(), hstmt)
+    if not ODBCConstants.ok(rc) then
+      let diag = _DiagHelper.read(ODBCConstants.handle_stmt(), hstmt)
+      @SQLFreeHandle(ODBCConstants.handle_stmt(), hstmt)
       return ExecError(
         ExecErrorClassifier.classify(diag), diag, sql)
     end
@@ -150,9 +71,9 @@ class ref Connection
     var row_count: I64 = 0
     @SQLRowCount(hstmt, addressof row_count)
 
-    @SQLFreeHandle(_ODBC.handle_stmt(), hstmt)
+    @SQLFreeHandle(ODBCConstants.handle_stmt(), hstmt)
 
-    if row_count == _ODBC.sql_no_row_count() then
+    if row_count == ODBCConstants.sql_no_row_count() then
       NoRowCount
     else
       row_count.usize()
@@ -182,9 +103,9 @@ class ref Connection
     var hstmt: Pointer[None] tag = Pointer[None]
     var rc =
       @SQLAllocHandle(
-      _ODBC.handle_stmt(), _hdbc, addressof hstmt)
-    if not _ODBC.ok(rc) then
-      let diag = _DiagHelper.read(_ODBC.handle_dbc(), _hdbc)
+      ODBCConstants.handle_stmt(), _hdbc, addressof hstmt)
+    if not ODBCConstants.ok(rc) then
+      let diag = _DiagHelper.read(ODBCConstants.handle_dbc(), _hdbc)
       return PrepareError(DriverPrepareError, diag, sql)
     end
 
@@ -193,16 +114,16 @@ class ref Connection
       hstmt, sql.cpointer(), sql.size().i32())
 
     _last_warnings =
-      if _ODBC.has_info(rc) then
+      if ODBCConstants.has_info(rc) then
         Warnings(
-          _DiagHelper.read(_ODBC.handle_stmt(), hstmt))
+          _DiagHelper.read(ODBCConstants.handle_stmt(), hstmt))
       else
         None
       end
 
-    if not _ODBC.ok(rc) then
-      let diag = _DiagHelper.read(_ODBC.handle_stmt(), hstmt)
-      @SQLFreeHandle(_ODBC.handle_stmt(), hstmt)
+    if not ODBCConstants.ok(rc) then
+      let diag = _DiagHelper.read(ODBCConstants.handle_stmt(), hstmt)
+      @SQLFreeHandle(ODBCConstants.handle_stmt(), hstmt)
       return PrepareError(DriverPrepareError, diag, sql)
     end
 
@@ -234,9 +155,9 @@ class ref Connection
     var hstmt: Pointer[None] tag = Pointer[None]
     var rc =
       @SQLAllocHandle(
-      _ODBC.handle_stmt(), _hdbc, addressof hstmt)
-    if not _ODBC.ok(rc) then
-      let diag = _DiagHelper.read(_ODBC.handle_dbc(), _hdbc)
+      ODBCConstants.handle_stmt(), _hdbc, addressof hstmt)
+    if not ODBCConstants.ok(rc) then
+      let diag = _DiagHelper.read(ODBCConstants.handle_dbc(), _hdbc)
       return ExecError(
         ExecErrorClassifier.classify(diag), diag, sql)
     end
@@ -246,16 +167,16 @@ class ref Connection
       hstmt, sql.cpointer(), sql.size().i32())
 
     _last_warnings =
-      if _ODBC.has_info(rc) then
+      if ODBCConstants.has_info(rc) then
         Warnings(
-          _DiagHelper.read(_ODBC.handle_stmt(), hstmt))
+          _DiagHelper.read(ODBCConstants.handle_stmt(), hstmt))
       else
         None
       end
 
-    if not _ODBC.ok(rc) then
-      let diag = _DiagHelper.read(_ODBC.handle_stmt(), hstmt)
-      @SQLFreeHandle(_ODBC.handle_stmt(), hstmt)
+    if not ODBCConstants.ok(rc) then
+      let diag = _DiagHelper.read(ODBCConstants.handle_stmt(), hstmt)
+      @SQLFreeHandle(ODBCConstants.handle_stmt(), hstmt)
       return ExecError(
         ExecErrorClassifier.classify(diag), diag, sql)
     end
@@ -264,9 +185,9 @@ class ref Connection
       Cursor._create(hstmt, _alive, _opts)?
     else
       // Column binding failed — close cursor and free handle
-      @SQLFreeStmt(hstmt, _ODBC.sql_close_cursor())
-      let diag = _DiagHelper.read(_ODBC.handle_stmt(), hstmt)
-      @SQLFreeHandle(_ODBC.handle_stmt(), hstmt)
+      @SQLFreeStmt(hstmt, ODBCConstants.sql_close_cursor())
+      let diag = _DiagHelper.read(ODBCConstants.handle_stmt(), hstmt)
+      @SQLFreeHandle(ODBCConstants.handle_stmt(), hstmt)
       ExecError(ExecErrorClassifier.classify(diag), diag, sql)
     end
 
@@ -293,17 +214,17 @@ class ref Connection
 
     let rc =
       @SQLSetConnectAttr(
-      _hdbc, _ODBC.attr_autocommit(), _ODBC.autocommit_off(), 0)
+      _hdbc, ODBCConstants.attr_autocommit(), ODBCConstants.autocommit_off(), 0)
 
-    if not _ODBC.ok(rc) then
-      let diag = _DiagHelper.read(_ODBC.handle_dbc(), _hdbc)
+    if not ODBCConstants.ok(rc) then
+      let diag = _DiagHelper.read(ODBCConstants.handle_dbc(), _hdbc)
       return TxBeginError(DriverTxError, diag)
     end
 
     _last_warnings =
-      if _ODBC.has_info(rc) then
+      if ODBCConstants.has_info(rc) then
         Warnings(
-          _DiagHelper.read(_ODBC.handle_dbc(), _hdbc))
+          _DiagHelper.read(ODBCConstants.handle_dbc(), _hdbc))
       else
         None
       end
@@ -324,10 +245,10 @@ class ref Connection
 
     let rc =
       @SQLEndTran(
-      _ODBC.handle_dbc(), _hdbc, _ODBC.sql_commit())
+      ODBCConstants.handle_dbc(), _hdbc, ODBCConstants.sql_commit())
 
-    if not _ODBC.ok(rc) then
-      let diag = _DiagHelper.read(_ODBC.handle_dbc(), _hdbc)
+    if not ODBCConstants.ok(rc) then
+      let diag = _DiagHelper.read(ODBCConstants.handle_dbc(), _hdbc)
       let verdict =
         try
           let state = diag(0)?.sqlstate
@@ -349,7 +270,7 @@ class ref Connection
       // Re-enable autocommit on CommitFailed (server rolled back)
       if verdict is CommitFailed then
         @SQLSetConnectAttr(
-          _hdbc, _ODBC.attr_autocommit(), _ODBC.autocommit_on(), 0)
+          _hdbc, ODBCConstants.attr_autocommit(), ODBCConstants.autocommit_on(), 0)
         _in_tx = false
       end
 
@@ -358,13 +279,13 @@ class ref Connection
 
     // Success — re-enable autocommit
     @SQLSetConnectAttr(
-      _hdbc, _ODBC.attr_autocommit(), _ODBC.autocommit_on(), 0)
+      _hdbc, ODBCConstants.attr_autocommit(), ODBCConstants.autocommit_on(), 0)
     _in_tx = false
 
     _last_warnings =
-      if _ODBC.has_info(rc) then
+      if ODBCConstants.has_info(rc) then
         Warnings(
-          _DiagHelper.read(_ODBC.handle_dbc(), _hdbc))
+          _DiagHelper.read(ODBCConstants.handle_dbc(), _hdbc))
       else
         None
       end
@@ -383,22 +304,22 @@ class ref Connection
 
     let rc =
       @SQLEndTran(
-      _ODBC.handle_dbc(), _hdbc, _ODBC.sql_rollback())
+      ODBCConstants.handle_dbc(), _hdbc, ODBCConstants.sql_rollback())
 
     // Always clear tx state
     _in_tx = false
     @SQLSetConnectAttr(
-      _hdbc, _ODBC.attr_autocommit(), _ODBC.autocommit_on(), 0)
+      _hdbc, ODBCConstants.attr_autocommit(), ODBCConstants.autocommit_on(), 0)
 
-    if not _ODBC.ok(rc) then
-      let diag = _DiagHelper.read(_ODBC.handle_dbc(), _hdbc)
+    if not ODBCConstants.ok(rc) then
+      let diag = _DiagHelper.read(ODBCConstants.handle_dbc(), _hdbc)
       return TxRollbackError(DriverRollbackError, diag)
     end
 
     _last_warnings =
-      if _ODBC.has_info(rc) then
+      if ODBCConstants.has_info(rc) then
         Warnings(
-          _DiagHelper.read(_ODBC.handle_dbc(), _hdbc))
+          _DiagHelper.read(ODBCConstants.handle_dbc(), _hdbc))
       else
         None
       end
@@ -440,14 +361,14 @@ class ref Connection
 
     if _in_tx then
       @SQLEndTran(
-        _ODBC.handle_dbc(), _hdbc, _ODBC.sql_rollback())
+        ODBCConstants.handle_dbc(), _hdbc, ODBCConstants.sql_rollback())
       _in_tx = false
     end
 
     _alive.set_dead()
     @SQLDisconnect(_hdbc)
-    @SQLFreeHandle(_ODBC.handle_dbc(), _hdbc)
-    @SQLFreeHandle(_ODBC.handle_env(), _henv)
+    @SQLFreeHandle(ODBCConstants.handle_dbc(), _hdbc)
+    @SQLFreeHandle(ODBCConstants.handle_env(), _henv)
     _hdbc = Pointer[None]
     _henv = Pointer[None]
     _closed = true
@@ -459,9 +380,9 @@ class ref Connection
     if not _closed then
       if _in_tx then
         @SQLEndTran(
-          _ODBC.handle_dbc(), _hdbc, _ODBC.sql_rollback())
+          ODBCConstants.handle_dbc(), _hdbc, ODBCConstants.sql_rollback())
       end
       @SQLDisconnect(_hdbc)
-      @SQLFreeHandle(_ODBC.handle_dbc(), _hdbc)
-      @SQLFreeHandle(_ODBC.handle_env(), _henv)
+      @SQLFreeHandle(ODBCConstants.handle_dbc(), _hdbc)
+      @SQLFreeHandle(ODBCConstants.handle_env(), _henv)
     end
