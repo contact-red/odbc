@@ -9,7 +9,7 @@ Very much alpha software. I expect breaking changes. You should feel hesitant us
 ## Installation
 
 * Install [corral](https://github.com/contact-red/odbc)
-* `corral add github.com/contact-red/odbc.git --version 0.0.2`
+* `corral add github.com/contact-red/odbc.git --version 0.0.3`
 * `corral fetch` to fetch your dependencies
 * `use "odbc"` to include this package
 * `corral run -- ponyc` to compile your application
