@@ -39,6 +39,7 @@ primitive ODBCConstants
   fun c_sbigint(): I16 => -25
   fun c_double(): I16 => 8
   fun c_bit(): I16 => -7
+  fun c_binary(): I16 => -2
   fun c_type_date(): I16 => 91
   fun c_type_time(): I16 => 92
   fun c_type_timestamp(): I16 => 93

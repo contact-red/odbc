@@ -11,11 +11,11 @@ class ref Statement
   var _cursor_open: Bool = false
   var _last_warnings: (Warnings | None) = None
   let _bound_flags: Array[Bool] ref
-  let _param_bufs: Array[Array[U8]] ref
+  // Bound SqlValue per slot. Each value owns its own storage; Statement
+  // retains the reference so the pointer captured by SQLBindParameter
+  // stays valid until the next rebind on that slot or close().
+  let _params: Array[(SqlValue | None)] ref
   let _param_inds: Array[I64] ref
-  let _param_c_types: Array[I16] ref
-  var _params_bound_to_odbc: Bool = false
-  var _needs_rebind: Bool = false
   var _col_bindings: (_ColumnBindings | None) = None
   let _opts: OdbcOptions
 
@@ -32,14 +32,8 @@ class ref Statement
 
     let n = param_count.usize()
     _bound_flags = Array[Bool].init(false, n)
-    _param_bufs = Array[Array[U8]](n)
+    _params = Array[(SqlValue | None)].init(None, n)
     _param_inds = Array[I64].init(0, n)
-    _param_c_types = Array[I16].init(0, n)
-    var i: USize = 0
-    while i < n do
-      _param_bufs.push(Array[U8].init(0, 8))
-      i = i + 1
-    end
 
   fun ref _check_alive(): (None | ExecError) =>
     if _closed then
@@ -218,7 +212,9 @@ class ref Statement
 
   fun ref bind(i: ParamIndex, v: SqlValue): (Bound | BindError) =>
     """
-    Write value into parameter scratch slot. Atomic per param.
+    Bind a value to a parameter slot. Each call replaces any previous
+    binding on the slot — the prior SqlValue is released and the new one
+    is retained for the lifetime of the binding.
     """
     if _closed then
       return BindError(BindStatementClosed, i)
@@ -235,21 +231,20 @@ class ref Statement
     let pos = (idx - 1).usize()
 
     try
-      let needed = v.required_size()
-      let buf =
-        if needed > _param_bufs(pos)?.size() then
-          let new_buf = Array[U8].init(0, needed)
-          _param_bufs(pos)? = new_buf
-          _needs_rebind = true
-          new_buf
-        else
-          _param_bufs(pos)?
-        end
+      // Retain v before ODBC captures a pointer into its storage so the
+      // backing memory outlives this method and the next SQLExecute.
+      _params(pos)? = v
+      _param_inds(pos)? = v.len_or_indptr()
 
-      v.populate_buffer(buf)
-      _param_inds(pos)?    = v.len_or_indptr()
-      _param_c_types(pos)? = v.c_data_type()
-      _bound_flags(pos)?   = true
+      let rc = v.bind_to_odbc(_hstmt, idx, _param_inds.cpointer(pos))
+      if not ODBCConstants.ok(rc) then
+        let diag = _DiagHelper.read(ODBCConstants.handle_stmt(), _hstmt)
+        _params(pos)? = None
+        _bound_flags(pos)? = false
+        return BindError(DriverRejected, i, diag)
+      end
+
+      _bound_flags(pos)? = true
     else
       return BindError(ParamIndexOutOfRange, i)
     end
@@ -287,10 +282,6 @@ class ref Statement
     end
 
     match _check_all_bound()
-    | let e: ExecError => return e
-    end
-
-    match _bind_params_to_odbc()
     | let e: ExecError => return e
     end
 
@@ -337,10 +328,6 @@ class ref Statement
     | let e: ExecError => return e
     end
 
-    match _bind_params_to_odbc()
-    | let e: ExecError => return e
-    end
-
     let rc = @SQLExecute(_hstmt)
     _last_warnings =
       if ODBCConstants.has_info(rc) then
@@ -375,71 +362,6 @@ class ref Statement
       end
       i = i + 1
     end
-    None
-
-  fun ref _bind_params_to_odbc(): (None | ExecError) =>
-    """
-    Bind-once: call SQLBindParameter on first execute, then only when
-    a text buffer was reallocated (dirty flag).
-    """
-    if _params_bound_to_odbc and (not _needs_rebind) then return None end
-    if _param_count == 0 then return None end
-
-    var i: USize = 0
-    while i < _param_count.usize() do
-      // On first bind, bind all. On rebind, only bind dirty (text that grew).
-      // For simplicity in v1, rebind all on dirty — the cost is N FFI calls
-      // which only happens when a text param grew.
-      try
-        let buf = _param_bufs(i)?
-        let ind = _param_inds(i)?
-        let c_type = _param_c_types(i)?
-        let param_num = (i + 1).u16()
-
-        let sql_type: I16 =
-          match c_type
-          | ODBCConstants.c_bit() => ODBCConstants.sql_bit()
-          | ODBCConstants.c_stinyint() => ODBCConstants.sql_tinyint()
-          | ODBCConstants.c_sshort() => ODBCConstants.sql_smallint()
-          | ODBCConstants.c_slong() => ODBCConstants.sql_integer()
-          | ODBCConstants.c_sbigint() => ODBCConstants.sql_bigint()
-          | ODBCConstants.c_double() => ODBCConstants.sql_double()
-          | ODBCConstants.c_type_date() => ODBCConstants.sql_type_date()
-          | ODBCConstants.c_type_time() => ODBCConstants.sql_type_time()
-          | ODBCConstants.c_type_timestamp() => ODBCConstants.sql_type_timestamp()
-          else ODBCConstants.sql_varchar()
-          end
-
-        let col_size: U64 =
-          if c_type == ODBCConstants.c_char() then
-            if ind > 0 then ind.u64() else 1 end
-          else
-            0
-          end
-
-        let rc =
-          @SQLBindParameter(
-          _hstmt,
-          param_num,
-          ODBCConstants.sql_param_input(),
-          c_type,
-          sql_type,
-          col_size,
-          0,
-          buf.cpointer(),
-          buf.size().i64(),
-          _param_inds.cpointer(i))
-
-        if not ODBCConstants.ok(rc) then
-          let diag = _DiagHelper.read(ODBCConstants.handle_stmt(), _hstmt)
-          return ExecError(ExecErrorClassifier.classify(diag), diag)
-        end
-      end
-      i = i + 1
-    end
-
-    _params_bound_to_odbc = true
-    _needs_rebind = false
     None
 
   fun ref fetch(): (Row | EndOfRows | FetchError) =>

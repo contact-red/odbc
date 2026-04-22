@@ -11,7 +11,23 @@ class val SqlBigInt is SqlValue
     value.string()
 
   fun c_data_type(): I16 => ODBCConstants.c_sbigint()
-  fun required_size(): USize => 8
 
-  fun populate_buffer(buf: Array[U8]) =>
-    @memcpy(buf.cpointer(), addressof value, 8)
+  fun bind_to_odbc(
+    hstmt: Pointer[None] tag,
+    param_num: U16,
+    ind_ptr: Pointer[I64] tag)
+    : I16
+  =>
+    @SQLBindParameter(
+      hstmt, param_num,
+      ODBCConstants.sql_param_input(),
+      c_data_type(), sql_type(),
+      U64(0), I16(0),
+      addressof value, I64(8),
+      ind_ptr)
+
+primitive _SqlBigIntDecode
+  fun apply(buf: Array[U8] box): SqlBigInt =>
+    var v: I64 = 0
+    @memcpy(addressof v, buf.cpointer(), 8)
+    SqlBigInt(v)
