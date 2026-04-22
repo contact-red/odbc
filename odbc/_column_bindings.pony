@@ -2,6 +2,10 @@ class ref _ColumnBindings
   """
   Manages SQLBindCol buffers for a cursor's result set. Created once when
   a cursor opens; SQLFetch writes directly into these buffers.
+
+  Columns whose SQL type isn't natively mapped to a typed SqlValue are
+  marked as raw — left unbound here and read on demand via SQLGetData
+  with SQL_C_BINARY, surfaced to the user as `SqlRaw`.
   """
 
   let _num_cols: USize
@@ -16,8 +20,8 @@ class ref _ColumnBindings
   let _indicators: Array[I64] ref
   // Whether column is text (needs text_buf) or fixed (needs fixed_buf)
   let _is_text: Array[Bool] ref
-  // Whether column type is unsupported
-  let _is_unsupported: Array[Bool] ref
+  // Whether column is raw — unbound, read via SQLGetData on fetch.
+  let _is_raw: Array[Bool] ref
   let _opts: OdbcOptions
   let _hstmt: Pointer[None] tag
 
@@ -35,7 +39,7 @@ class ref _ColumnBindings
     _text_bufs = Array[String ref](_num_cols)
     _indicators = Array[I64].init(0, _num_cols)
     _is_text = Array[Bool](_num_cols)
-    _is_unsupported = Array[Bool](_num_cols)
+    _is_raw = Array[Bool](_num_cols)
 
     var col: U16 = 1
     while col <= nc.u16() do
@@ -83,18 +87,19 @@ class ref _ColumnBindings
         | ODBCConstants.sql_numeric() => ODBCConstants.c_char()
         | ODBCConstants.sql_decimal() => ODBCConstants.c_char()
         else
-        // Unsupported type — don't bind, will produce FetchError
+        // Unmapped SQL type — leave unbound; we'll fetch raw bytes via
+        // SQLGetData on read and surface as SqlRaw.
         _c_types.push(0)
         _fixed_bufs.push(Array[U8])
         _text_bufs.push(String)
         _is_text.push(false)
-        _is_unsupported.push(true)
+        _is_raw.push(true)
         col = col + 1
         continue
       end
 
       _c_types.push(c_type)
-      _is_unsupported.push(false)
+      _is_raw.push(false)
 
       if c_type == ODBCConstants.c_char() then
         // Text column: allocate buffer based on declared col_size, capped.
@@ -196,8 +201,8 @@ class ref _ColumnBindings
     Read the SqlValue for column i from the bound buffers.
     """
     try
-      if _is_unsupported(i)? then
-        return FetchError(UnsupportedColumnType)
+      if _is_raw(i)? then
+        return _read_raw(i)
       end
 
       let ind = _indicators(i)?
@@ -236,51 +241,23 @@ class ref _ColumnBindings
         let c_type = _c_types(i)?
 
         if c_type == ODBCConstants.c_stinyint() then
-          var value: I8 = 0
-          @memcpy(addressof value, fbuf.cpointer(), 1)
-          return SqlTinyInt(value)
+          return _SqlTinyIntDecode(fbuf)
         elseif c_type == ODBCConstants.c_sshort() then
-          var value: I16 = 0
-          @memcpy(addressof value, fbuf.cpointer(), 2)
-          return SqlSmallInt(value)
+          return _SqlSmallIntDecode(fbuf)
         elseif c_type == ODBCConstants.c_slong() then
-          var value: I32 = 0
-          @memcpy(addressof value, fbuf.cpointer(), 4)
-          return SqlInteger(value)
+          return _SqlIntegerDecode(fbuf)
         elseif c_type == ODBCConstants.c_sbigint() then
-          var value: I64 = 0
-          @memcpy(addressof value, fbuf.cpointer(), 8)
-          return SqlBigInt(value)
+          return _SqlBigIntDecode(fbuf)
         elseif c_type == ODBCConstants.c_double() then
-          var value: F64 = 0
-          @memcpy(addressof value, fbuf.cpointer(), 8)
-          return SqlFloat(value)
+          return _SqlFloatDecode(fbuf)
         elseif c_type == ODBCConstants.c_bit() then
-          return SqlBool(try fbuf(0)? != 0 else false end)
+          return _SqlBoolDecode(fbuf)
         elseif c_type == ODBCConstants.c_type_date() then
-          var yr: I16 = 0; var mo: U16 = 0; var dy: U16 = 0
-          @memcpy(addressof yr, fbuf.cpointer(), 2)
-          @memcpy(addressof mo, fbuf.cpointer(2), 2)
-          @memcpy(addressof dy, fbuf.cpointer(4), 2)
-          return SqlDate(yr, mo, dy)
+          return _SqlDateDecode(fbuf)
         elseif c_type == ODBCConstants.c_type_time() then
-          var hr: U16 = 0; var mi: U16 = 0; var se: U16 = 0
-          @memcpy(addressof hr, fbuf.cpointer(), 2)
-          @memcpy(addressof mi, fbuf.cpointer(2), 2)
-          @memcpy(addressof se, fbuf.cpointer(4), 2)
-          return SqlTime(hr, mi, se)
+          return _SqlTimeDecode(fbuf)
         elseif c_type == ODBCConstants.c_type_timestamp() then
-          var yr: I16 = 0; var mo: U16 = 0; var dy: U16 = 0
-          var hr: U16 = 0; var mi: U16 = 0; var se: U16 = 0
-          var fr: U32 = 0
-          @memcpy(addressof yr, fbuf.cpointer(), 2)
-          @memcpy(addressof mo, fbuf.cpointer(2), 2)
-          @memcpy(addressof dy, fbuf.cpointer(4), 2)
-          @memcpy(addressof hr, fbuf.cpointer(6), 2)
-          @memcpy(addressof mi, fbuf.cpointer(8), 2)
-          @memcpy(addressof se, fbuf.cpointer(10), 2)
-          @memcpy(addressof fr, fbuf.cpointer(12), 4)
-          return SqlTimestamp(yr, mo, dy, hr, mi, se, fr)
+          return _SqlTimestampDecode(fbuf)
         end
       end
     end
@@ -357,6 +334,74 @@ class ref _ColumnBindings
         else ind.usize().min(total_len)
         end
       buf.substring(0, len.isize())
+    else
+      FetchError(DriverFetchError)
+    end
+
+  fun ref _read_raw(i: USize): (SqlValue | FetchError) =>
+    """
+    Fetch a raw column via SQLGetData (column was unbound at execute time).
+    Two-pass: probe with a 1-byte buffer to learn the length and null
+    state, then allocate exactly and re-fetch.
+
+    NULL cells return `SqlNull`, matching the convention for typed
+    columns. Non-null cells return `SqlRaw` carrying the original SQL
+    type code, the bytes, and the indicator.
+    """
+    try
+      var probe_byte: U8 = 0
+      var probe_ind: I64 = 0
+      let rc1 =
+        @SQLGetData(
+        _hstmt,
+        (i + 1).u16(),
+        ODBCConstants.c_binary(),
+        addressof probe_byte,
+        I64(1),
+        addressof probe_ind)
+
+      if (not ODBCConstants.ok(rc1)) and (not ODBCConstants.has_info(rc1)) then
+        return FetchError(DriverFetchError)
+      end
+
+      if probe_ind == ODBCConstants.sql_null_data() then
+        return SqlNull
+      end
+
+      // Indicator < 0 (other than SQL_NULL_DATA) means SQL_NO_TOTAL or
+      // similar — we can't size the buffer, so treat as fetch error.
+      if probe_ind < 0 then
+        return FetchError(DriverFetchError)
+      end
+
+      let total_len = probe_ind.usize()
+      if total_len > _opts.max_column_bytes() then
+        return FetchError(ColumnTooLarge)
+      end
+
+      let sql_type = _sql_types(i)?
+
+      if total_len == 0 then
+        return SqlRaw(sql_type, recover val Array[U8] end, 0)
+      end
+
+      // Allocate exact size (iso so we can consume to val), re-fetch.
+      let buf = recover iso Array[U8].init(0, total_len) end
+      var ind: I64 = 0
+      let rc2 =
+        @SQLGetData(
+        _hstmt,
+        (i + 1).u16(),
+        ODBCConstants.c_binary(),
+        buf.cpointer(),
+        total_len.i64(),
+        addressof ind)
+
+      if not ODBCConstants.ok(rc2) then
+        return FetchError(DriverFetchError)
+      end
+
+      SqlRaw(sql_type, consume buf, ind)
     else
       FetchError(DriverFetchError)
     end

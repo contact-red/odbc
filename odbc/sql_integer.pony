@@ -25,3 +25,9 @@ class val SqlInteger is SqlValue
       U64(0), I16(0),
       addressof value, I64(4),
       ind_ptr)
+
+primitive _SqlIntegerDecode
+  fun apply(buf: Array[U8] box): SqlInteger =>
+    var v: I32 = 0
+    @memcpy(addressof v, buf.cpointer(), 4)
+    SqlInteger(v)

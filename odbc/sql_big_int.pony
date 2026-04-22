@@ -25,3 +25,9 @@ class val SqlBigInt is SqlValue
       U64(0), I16(0),
       addressof value, I64(8),
       ind_ptr)
+
+primitive _SqlBigIntDecode
+  fun apply(buf: Array[U8] box): SqlBigInt =>
+    var v: I64 = 0
+    @memcpy(addressof v, buf.cpointer(), 8)
+    SqlBigInt(v)

@@ -29,3 +29,7 @@ class val SqlBool is SqlValue
       U64(0), I16(0),
       addressof _byte, I64(1),
       ind_ptr)
+
+primitive _SqlBoolDecode
+  fun apply(buf: Array[U8] box): SqlBool =>
+    SqlBool(try buf(0)? != 0 else false end)

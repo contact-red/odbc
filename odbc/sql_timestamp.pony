@@ -84,3 +84,21 @@ class val SqlTimestamp is SqlValue
       U64(0), I16(0),
       _buf.cpointer(), _buf.size().i64(),
       ind_ptr)
+
+primitive _SqlTimestampDecode
+  fun apply(buf: Array[U8] box): SqlTimestamp =>
+    var yr: I16 = 0
+    var mo: U16 = 0
+    var dy: U16 = 0
+    var hr: U16 = 0
+    var mi: U16 = 0
+    var se: U16 = 0
+    var fr: U32 = 0
+    @memcpy(addressof yr, buf.cpointer(),    2)
+    @memcpy(addressof mo, buf.cpointer(2),   2)
+    @memcpy(addressof dy, buf.cpointer(4),   2)
+    @memcpy(addressof hr, buf.cpointer(6),   2)
+    @memcpy(addressof mi, buf.cpointer(8),   2)
+    @memcpy(addressof se, buf.cpointer(10),  2)
+    @memcpy(addressof fr, buf.cpointer(12),  4)
+    SqlTimestamp(yr, mo, dy, hr, mi, se, fr)

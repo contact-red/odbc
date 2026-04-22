@@ -49,3 +49,13 @@ class val SqlDate is SqlValue
       U64(0), I16(0),
       _buf.cpointer(), _buf.size().i64(),
       ind_ptr)
+
+primitive _SqlDateDecode
+  fun apply(buf: Array[U8] box): SqlDate =>
+    var yr: I16 = 0
+    var mo: U16 = 0
+    var dy: U16 = 0
+    @memcpy(addressof yr, buf.cpointer(),  2)
+    @memcpy(addressof mo, buf.cpointer(2), 2)
+    @memcpy(addressof dy, buf.cpointer(4), 2)
+    SqlDate(yr, mo, dy)

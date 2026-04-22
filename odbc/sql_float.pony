@@ -26,3 +26,9 @@ class val SqlFloat is SqlValue
       U64(0), I16(0),
       addressof value, I64(8),
       ind_ptr)
+
+primitive _SqlFloatDecode
+  fun apply(buf: Array[U8] box): SqlFloat =>
+    var v: F64 = 0
+    @memcpy(addressof v, buf.cpointer(), 8)
+    SqlFloat(v)
