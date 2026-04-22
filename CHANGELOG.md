@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org/) and [Keep a CHANGELOG](http://keepachangelog.com/).
 
-## [unreleased] - unreleased
+## [0.0.3] - 2026-04-22
 
 ### Fixed
 
@@ -25,9 +25,6 @@ All notable changes to this project will be documented in this file. This projec
   IM001/HYC00.
 - `examples/metadata` demonstrating both calls against a prepared
   SELECT and INSERT.
-
-### Changed
-
 
 ## [0.0.2] - 2026-04-16
 
