@@ -918,13 +918,16 @@ class iso _LargeTextRoundtripTest is UnitTest
   fun apply(h: TestHelper) =>
     try
       let conn = _TestSetup.connect(h)?
+      let profile = _TestDriver(h)
       _TestSetup.exec(conn, "DROP TABLE IF EXISTS _test_largetxt", h)
       _TestSetup.exec(
-        conn, "CREATE TABLE _test_largetxt (sz INTEGER, t TEXT)", h)
+        conn,
+        "CREATE TABLE _test_largetxt (sz INTEGER, t "
+          + profile.huge_text_col_type + ")",
+        h)
 
       // Test sizes: below 4096 floor, at boundary, and well above.
       // SQLGetData fallback handles sizes exceeding the bound buffer.
-      let profile = _TestDriver(h)
       let sizes = profile.large_text_sizes
 
       // Insert rows with strings of each size

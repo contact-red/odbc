@@ -31,7 +31,7 @@ class val DriverProfile
     describe_param_accurate = true
     reports_not_null = true
     large_text_sizes = [as USize:
-      100; 2000; 4000; 4095; 4096; 5000; 8000; 10240; 20000; 100000]
+      100; 2000; 4000; 4095; 4096; 5000; 8000; 10240; 20000; 100000; 1000000; 10000000]
     huge_text_col_type = "TEXT"
 
   new val mariadb() =>
@@ -40,7 +40,7 @@ class val DriverProfile
     describe_param_accurate = false
     reports_not_null = true
     large_text_sizes = [as USize:
-      100; 2000; 4000; 4095; 4096; 5000; 8000; 10240; 20000]
+      100; 2000; 4000; 4095; 4096; 5000; 8000; 10240; 20000; 100000; 1000000; 10000000]
     huge_text_col_type = "LONGTEXT"
 
   new val sqlite() =>
@@ -49,7 +49,7 @@ class val DriverProfile
     describe_param_accurate = false
     reports_not_null = false
     large_text_sizes = [as USize:
-      100; 2000; 4000; 4095; 4096; 5000; 8000; 10240; 20000]
+      100; 2000; 4000; 4095; 4096; 5000; 8000; 10240; 20000; 100000; 1000000; 10000000]
     huge_text_col_type = "TEXT"
 
 primitive _TestDriver
