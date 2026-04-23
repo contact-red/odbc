@@ -49,6 +49,7 @@ actor Main is TestList
     test(_PartialFunctionTest)
     test(_BindDateTimeDecimalTest)
     test(_LargeTextRoundtripTest)
+    test(_LargeTextGenRoundtripTest)
     test(_TextTruncationDetectionTest)
     test(_DbSessionTest)
     test(_MetadataParamTypesTest)
