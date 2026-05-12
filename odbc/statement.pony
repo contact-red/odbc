@@ -1,3 +1,5 @@
+use "pony-ffi"
+
 class ref Statement
   """
   Non-sendable prepared statement wrapping SQLHSTMT. Reusable: bind,
@@ -132,8 +134,8 @@ class ref Statement
     reports a longer name.
     """
     let initial_cap: USize = 128
-    var name_buf = Array[U8].init(0, initial_cap)
-    var name_len: I16 = 0
+    var name_buf = CBuffer[I16](initial_cap)
+    var nbox = name_buf.written_size_ptr()
     var data_type: I16 = 0
     var col_size: U64 = 0
     var decimal_digits: I16 = 0
@@ -143,9 +145,9 @@ class ref Statement
       @SQLDescribeCol(
       _hstmt,
       col,
-      name_buf.cpointer(),
+      name_buf.ptr(),
       initial_cap.i16(),
-      addressof name_len,
+      addressof nbox.value,
       addressof data_type,
       addressof col_size,
       addressof decimal_digits,
@@ -158,16 +160,17 @@ class ref Statement
 
     // col_name_max includes the null terminator, so truncation happens
     // when name_len >= (initial_cap - 1). Retry once with an exact buffer.
-    if name_len.usize() >= (initial_cap - 1) then
-      let bigger_cap = name_len.usize() + 1
-      name_buf = Array[U8].init(0, bigger_cap)
+    if nbox.value.usize() >= (initial_cap - 1) then
+      let bigger_cap = nbox.value.usize() + 1
+      name_buf = CBuffer[I16](bigger_cap)
+      nbox = name_buf.written_size_ptr()
       rc =
         @SQLDescribeCol(
         _hstmt,
         col,
-        name_buf.cpointer(),
+        name_buf.ptr(),
         bigger_cap.i16(),
-        addressof name_len,
+        addressof nbox.value,
         addressof data_type,
         addressof col_size,
         addressof decimal_digits,
@@ -178,14 +181,11 @@ class ref Statement
       end
     end
 
-    let actual_len = name_len.usize().min(name_buf.size())
-    let name_tmp = String(actual_len)
-    var j: USize = 0
-    while j < actual_len do
-      try name_tmp.push(name_buf(j)?) end
-      j = j + 1
-    end
-    let name: String val = name_tmp.clone()
+    // copy_string_truncated clamps to capacity when the driver reports a
+    // longer name_len than the buffer can hold (first-pass truncation).
+    // On the exact-sized retry, written_size <= allocated so no clamping.
+    let name: String val =
+      try name_buf.copy_string_truncated()? else "" end
 
     ColumnMeta(
       name,

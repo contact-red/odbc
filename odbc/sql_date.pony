@@ -51,11 +51,11 @@ class val SqlDate is SqlValue
       ind_ptr)
 
 primitive _SqlDateDecode
-  fun apply(buf: Array[U8] box): SqlDate =>
+  fun apply(buf: Pointer[U8] tag): SqlDate =>
     var yr: I16 = 0
     var mo: U16 = 0
     var dy: U16 = 0
-    @memcpy(addressof yr, buf.cpointer(),  2)
-    @memcpy(addressof mo, buf.cpointer(2), 2)
-    @memcpy(addressof dy, buf.cpointer(4), 2)
+    @memcpy(addressof yr, buf,           2)
+    @memcpy(addressof mo, buf.offset(2), 2)
+    @memcpy(addressof dy, buf.offset(4), 2)
     SqlDate(yr, mo, dy)

@@ -52,11 +52,11 @@ class val SqlTime is SqlValue
       ind_ptr)
 
 primitive _SqlTimeDecode
-  fun apply(buf: Array[U8] box): SqlTime =>
+  fun apply(buf: Pointer[U8] tag): SqlTime =>
     var hr: U16 = 0
     var mi: U16 = 0
     var se: U16 = 0
-    @memcpy(addressof hr, buf.cpointer(),  2)
-    @memcpy(addressof mi, buf.cpointer(2), 2)
-    @memcpy(addressof se, buf.cpointer(4), 2)
+    @memcpy(addressof hr, buf,           2)
+    @memcpy(addressof mi, buf.offset(2), 2)
+    @memcpy(addressof se, buf.offset(4), 2)
     SqlTime(hr, mi, se)

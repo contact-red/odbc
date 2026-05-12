@@ -27,7 +27,7 @@ class val SqlSmallInt is SqlValue
       ind_ptr)
 
 primitive _SqlSmallIntDecode
-  fun apply(buf: Array[U8] box): SqlSmallInt =>
+  fun apply(buf: Pointer[U8] tag): SqlSmallInt =>
     var v: I16 = 0
-    @memcpy(addressof v, buf.cpointer(), 2)
+    @memcpy(addressof v, buf, 2)
     SqlSmallInt(v)

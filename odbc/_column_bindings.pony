@@ -1,24 +1,28 @@
+use "pony-ffi"
+
 class ref _ColumnBindings
   """
   Manages SQLBindCol buffers for a cursor's result set. Created once when
   a cursor opens; SQLFetch writes directly into these buffers.
 
+  Each column gets a `CBuffer[I64]` whose data pointer is bound as the
+  target buffer and whose `written_size_ptr()` is bound as the
+  strlen-or-indicator out-parameter. The indicator (byte length on
+  success, `SQL_NULL_DATA` for null) is read through
+  `cb.get_written_size()`.
+
   Columns whose SQL type isn't natively mapped to a typed SqlValue are
   marked as raw — left unbound here and read on demand via SQLGetData
-  with SQL_C_BINARY, surfaced to the user as `SqlRaw`.
+  with SQL_C_BINARY, surfaced to the user as `SqlRaw`. A placeholder
+  CBuffer is stored in the same slot to keep the array indices aligned.
   """
 
   let _num_cols: USize
-  // Per-column metadata
   let _sql_types: Array[I16] ref
   let _c_types: Array[I16] ref
-  // Per-column buffers for fixed-width types (I64, F64, U8)
-  let _fixed_bufs: Array[Array[U8]] ref
-  // Per-column buffers for text
-  let _text_bufs: Array[String ref] ref
-  // Per-column indicator (SQL_NULL_DATA or byte length)
-  let _indicators: Array[I64] ref
-  // Whether column is text (needs text_buf) or fixed (needs fixed_buf)
+  // Per-column buffer + indicator. For raw columns, a 1-byte placeholder.
+  let _bufs: Array[CBuffer[I64]] ref
+  // Whether column is text (substring decode) or fixed-width (binary decode)
   let _is_text: Array[Bool] ref
   // Whether column is raw — unbound, read via SQLGetData on fetch.
   let _is_raw: Array[Bool] ref
@@ -35,9 +39,7 @@ class ref _ColumnBindings
 
     _sql_types = Array[I16](_num_cols)
     _c_types = Array[I16](_num_cols)
-    _fixed_bufs = Array[Array[U8]](_num_cols)
-    _text_bufs = Array[String ref](_num_cols)
-    _indicators = Array[I64].init(0, _num_cols)
+    _bufs = Array[CBuffer[I64]](_num_cols)
     _is_text = Array[Bool](_num_cols)
     _is_raw = Array[Bool](_num_cols)
 
@@ -65,8 +67,6 @@ class ref _ColumnBindings
 
       _sql_types.push(data_type)
 
-      let pos = (col - 1).usize()
-
       // Map SQL type to C type
       let c_type: I16 =
         match data_type
@@ -88,10 +88,10 @@ class ref _ColumnBindings
         | ODBCConstants.sql_decimal() => ODBCConstants.c_char()
         else
         // Unmapped SQL type — leave unbound; we'll fetch raw bytes via
-        // SQLGetData on read and surface as SqlRaw.
+        // SQLGetData on read and surface as SqlRaw. A 1-byte placeholder
+        // keeps _bufs indexed in lockstep with the other per-column arrays.
         _c_types.push(0)
-        _fixed_bufs.push(Array[U8])
-        _text_bufs.push(String)
+        _bufs.push(CBuffer[I64](1 where bzero = false))
         _is_text.push(false)
         _is_raw.push(true)
         col = col + 1
@@ -106,23 +106,20 @@ class ref _ColumnBindings
         // Floor at 4096 — some drivers report col_size=0 for TEXT/LONGVARCHAR.
         let buf_size =
           (col_size + 1).usize().max(4096).min(_opts.max_column_bytes())
-        let tbuf: String ref = String(buf_size)
-        var j: USize = 0
-        while j < buf_size do tbuf.push(0); j = j + 1 end
+        let cb = CBuffer[I64](buf_size)
 
-        _fixed_bufs.push(Array[U8])
-        _text_bufs.push(tbuf)
+        _bufs.push(cb)
         _is_text.push(true)
 
-        // Bind the text column
+        let wbox = cb.written_size_ptr()
         let rc =
           @SQLBindCol(
           hstmt,
           col,
           c_type,
-          tbuf.cpointer(),
+          cb.ptr(),
           buf_size.i64(),
-          _indicators.cpointer(pos))
+          addressof wbox.value)
         if not ODBCConstants.ok(rc) then error end
       else
         // Fixed-width column
@@ -137,21 +134,20 @@ class ref _ColumnBindings
           elseif c_type == ODBCConstants.c_slong() then 4
           else 8 // 8 covers I64 and F64
           end
-        let fbuf = Array[U8].init(0, fsize)
+        let cb = CBuffer[I64](fsize)
 
-        _fixed_bufs.push(fbuf)
-        _text_bufs.push(String)
+        _bufs.push(cb)
         _is_text.push(false)
 
-        // Bind the fixed column
+        let wbox = cb.written_size_ptr()
         let rc =
           @SQLBindCol(
           hstmt,
           col,
           c_type,
-          fbuf.cpointer(),
+          cb.ptr(),
           fsize.i64(),
-          _indicators.cpointer(pos))
+          addressof wbox.value)
         if not ODBCConstants.ok(rc) then error end
       end
 
@@ -205,19 +201,19 @@ class ref _ColumnBindings
         return _read_raw(i)
       end
 
-      let ind = _indicators(i)?
+      let cb = _bufs(i)?
+      let ind = cb.get_written_size()
 
       if ind == ODBCConstants.sql_null_data() then
         return SqlNull
       elseif _is_text(i)? then
-        let tbuf = _text_bufs(i)?
         let len = ind.usize()
 
         // If data fits in bound buffer, read directly.
         // Otherwise fall back to SQLGetData for the full value.
         var text: String val = ""
-        if len < tbuf.size() then
-          text = tbuf.substring(0, len.isize())
+        if len < cb.allocated() then
+          text = cb.copy_string()?
         else
           match \exhaustive\ _get_long_text(i)
           | let s: String val => text = s
@@ -237,27 +233,27 @@ class ref _ColumnBindings
           return SqlText(text)
         end
       else
-        let fbuf = _fixed_bufs(i)?
         let c_type = _c_types(i)?
+        let p = cb.ptr()
 
         if c_type == ODBCConstants.c_stinyint() then
-          return _SqlTinyIntDecode(fbuf)
+          return _SqlTinyIntDecode(p)
         elseif c_type == ODBCConstants.c_sshort() then
-          return _SqlSmallIntDecode(fbuf)
+          return _SqlSmallIntDecode(p)
         elseif c_type == ODBCConstants.c_slong() then
-          return _SqlIntegerDecode(fbuf)
+          return _SqlIntegerDecode(p)
         elseif c_type == ODBCConstants.c_sbigint() then
-          return _SqlBigIntDecode(fbuf)
+          return _SqlBigIntDecode(p)
         elseif c_type == ODBCConstants.c_double() then
-          return _SqlFloatDecode(fbuf)
+          return _SqlFloatDecode(p)
         elseif c_type == ODBCConstants.c_bit() then
-          return _SqlBoolDecode(fbuf)
+          return _SqlBoolDecode(p)
         elseif c_type == ODBCConstants.c_type_date() then
-          return _SqlDateDecode(fbuf)
+          return _SqlDateDecode(p)
         elseif c_type == ODBCConstants.c_type_time() then
-          return _SqlTimeDecode(fbuf)
+          return _SqlTimeDecode(p)
         elseif c_type == ODBCConstants.c_type_timestamp() then
-          return _SqlTimestampDecode(fbuf)
+          return _SqlTimestampDecode(p)
         end
       end
     end
@@ -305,35 +301,38 @@ class ref _ColumnBindings
     actually a duplicate of the prefix.
     """
     try
-      let total_len = _indicators(i)?.usize()
+      let bound = _bufs(i)?
+      let total_len = bound.get_written_size().usize()
       if total_len > _opts.max_column_bytes() then
         return FetchError(ColumnTooLarge)
       end
 
-      let buf: String ref = String(total_len + 1)
-      var j: USize = 0
-      while j < (total_len + 1) do buf.push(0); j = j + 1 end
-
-      var ind: I64 = 0
+      let cb = CBuffer[I64](total_len + 1)
+      let wbox = cb.written_size_ptr()
       let rc =
         @SQLGetData(
         _hstmt,
         (i + 1).u16(),
         ODBCConstants.c_char(),
-        buf.cpointer(),
+        cb.ptr(),
         (total_len + 1).i64(),
-        addressof ind)
+        addressof wbox.value)
 
       if not ODBCConstants.ok(rc) then
         return FetchError(DriverFetchError)
       end
 
+      let ind = cb.get_written_size()
       let len: USize =
         if ind == ODBCConstants.sql_null_data() then 0
         elseif ind < 0 then 0
         else ind.usize().min(total_len)
         end
-      buf.substring(0, len.isize())
+      // Clamp written_size to the final string length so copy_string
+      // returns exactly the bytes we want (handles both truncation
+      // markers and the +1 null-terminator slot).
+      cb.set_written_size(len.i64())
+      cb.copy_string()?
     else
       FetchError(DriverFetchError)
     end
@@ -349,20 +348,22 @@ class ref _ColumnBindings
     type code, the bytes, and the indicator.
     """
     try
-      var probe_byte: U8 = 0
-      var probe_ind: I64 = 0
+      let probe = CBuffer[I64](1 where bzero = false)
+      let pbox = probe.written_size_ptr()
       let rc1 =
         @SQLGetData(
         _hstmt,
         (i + 1).u16(),
         ODBCConstants.c_binary(),
-        addressof probe_byte,
+        probe.ptr(),
         I64(1),
-        addressof probe_ind)
+        addressof pbox.value)
 
       if (not ODBCConstants.ok(rc1)) and (not ODBCConstants.has_info(rc1)) then
         return FetchError(DriverFetchError)
       end
+
+      let probe_ind = probe.get_written_size()
 
       if probe_ind == ODBCConstants.sql_null_data() then
         return SqlNull
@@ -385,7 +386,10 @@ class ref _ColumnBindings
         return SqlRaw(sql_type, recover val Array[U8] end, 0)
       end
 
-      // Allocate exact size (iso so we can consume to val), re-fetch.
+      // Keep Array[U8] iso for the SqlRaw payload — `consume buf` is a
+      // zero-copy ownership transfer to the val carried by SqlRaw.
+      // CBuffer can't release ownership of its underlying allocation,
+      // so using it here would force an extra copy.
       let buf = recover iso Array[U8].init(0, total_len) end
       var ind: I64 = 0
       let rc2 =
