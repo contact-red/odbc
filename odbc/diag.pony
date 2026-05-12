@@ -1,4 +1,4 @@
-use "cbuffer"
+use "pony-ffi"
 
 class val DiagRecord
   """

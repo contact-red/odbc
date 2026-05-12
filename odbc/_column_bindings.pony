@@ -1,4 +1,4 @@
-use "cbuffer"
+use "pony-ffi"
 
 class ref _ColumnBindings
   """
