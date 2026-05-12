@@ -1,3 +1,5 @@
+use "cbuffer"
+
 class val DiagRecord
   """
   A single ODBC diagnostic record from SQLGetDiagRec.
@@ -45,52 +47,51 @@ primitive _DiagHelper
     Read up to 16 diagnostic records from an ODBC handle.
     """
 
-    // Build arrays for FFI output — these must be ref so we can read them
-    let state_buf: String ref = String(6)
-    state_buf.insert_byte(0, 0); state_buf.insert_byte(0, 0)
-    state_buf.insert_byte(0, 0); state_buf.insert_byte(0, 0)
-    state_buf.insert_byte(0, 0); state_buf.insert_byte(0, 0)
-
-    let msg_buf: String ref = String(_max_message_bytes())
+    // 6 bytes = 5-char SQLSTATE + null terminator. SQLGetDiagRec writes
+    // a fixed-width SQLSTATE so there's no length out-param for it.
+    let state_buf = CBuffer(6)
+    // I16 backs SQLGetDiagRec's text_length out-param.
+    let msg_buf = CBuffer[I16](_max_message_bytes())
+    let mbox = msg_buf.written_size_ptr()
 
     let records: Array[DiagRecord] iso = recover iso Array[DiagRecord] end
     var rec_num: I16 = 1
 
     while rec_num <= _max_records() do
-      // Reset buffers
-      state_buf.clear()
-      var i: USize = 0
-      while i < 6 do state_buf.push(0); i = i + 1 end
-      msg_buf.clear()
-      i = 0
-      while i < _max_message_bytes() do msg_buf.push(0); i = i + 1 end
+      state_buf.reset()
+      msg_buf.reset()
 
       var native: I32 = 0
-      var msg_len: I16 = 0
 
       let rc =
         @SQLGetDiagRec(
         handle_type,
         handle,
         rec_num,
-        state_buf.cpointer(),
+        state_buf.ptr(),
         addressof native,
-        msg_buf.cpointer(),
+        msg_buf.ptr(),
         _max_message_bytes().i16(),
-        addressof msg_len)
+        addressof mbox.value)
 
       if not ODBCConstants.ok(rc) then break end
 
-      // Extract SQLSTATE (5 chars)
-      let state: String val = state_buf.substring(0, 5)
+      // SQLSTATE is always 5 chars; the trailing byte is the null terminator.
+      state_buf.set_written_size(5)
+      let state: String val =
+        try state_buf.copy_string()? else "" end
 
-      // Extract message, capped
-      let actual_len = msg_len.usize().min(_max_message_bytes())
+      // copy_string_truncated clamps to capacity when the driver reports a
+      // longer text_length than the buffer holds, matching the prior
+      // substring(0, min(msg_len, cap)) behavior.
+      let msg_partial: String val =
+        try msg_buf.copy_string_truncated()? else "" end
+
       let msg: String val =
-        if msg_len.usize() > _max_message_bytes() then
-          msg_buf.substring(0, actual_len.isize()) + "...[truncated]"
+        if mbox.value.usize() > _max_message_bytes() then
+          msg_partial + "...[truncated]"
         else
-          msg_buf.substring(0, actual_len.isize())
+          msg_partial
         end
 
       records.push(DiagRecord(state, native, msg))

@@ -86,7 +86,7 @@ class val SqlTimestamp is SqlValue
       ind_ptr)
 
 primitive _SqlTimestampDecode
-  fun apply(buf: Array[U8] box): SqlTimestamp =>
+  fun apply(buf: Pointer[U8] tag): SqlTimestamp =>
     var yr: I16 = 0
     var mo: U16 = 0
     var dy: U16 = 0
@@ -94,11 +94,11 @@ primitive _SqlTimestampDecode
     var mi: U16 = 0
     var se: U16 = 0
     var fr: U32 = 0
-    @memcpy(addressof yr, buf.cpointer(),    2)
-    @memcpy(addressof mo, buf.cpointer(2),   2)
-    @memcpy(addressof dy, buf.cpointer(4),   2)
-    @memcpy(addressof hr, buf.cpointer(6),   2)
-    @memcpy(addressof mi, buf.cpointer(8),   2)
-    @memcpy(addressof se, buf.cpointer(10),  2)
-    @memcpy(addressof fr, buf.cpointer(12),  4)
+    @memcpy(addressof yr, buf,            2)
+    @memcpy(addressof mo, buf.offset(2),  2)
+    @memcpy(addressof dy, buf.offset(4),  2)
+    @memcpy(addressof hr, buf.offset(6),  2)
+    @memcpy(addressof mi, buf.offset(8),  2)
+    @memcpy(addressof se, buf.offset(10), 2)
+    @memcpy(addressof fr, buf.offset(12), 4)
     SqlTimestamp(yr, mo, dy, hr, mi, se, fr)

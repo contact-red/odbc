@@ -31,5 +31,7 @@ class val SqlBool is SqlValue
       ind_ptr)
 
 primitive _SqlBoolDecode
-  fun apply(buf: Array[U8] box): SqlBool =>
-    SqlBool(try buf(0)? != 0 else false end)
+  fun apply(buf: Pointer[U8] tag): SqlBool =>
+    var v: U8 = 0
+    @memcpy(addressof v, buf, 1)
+    SqlBool(v != 0)

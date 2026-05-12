@@ -27,7 +27,7 @@ class val SqlInteger is SqlValue
       ind_ptr)
 
 primitive _SqlIntegerDecode
-  fun apply(buf: Array[U8] box): SqlInteger =>
+  fun apply(buf: Pointer[U8] tag): SqlInteger =>
     var v: I32 = 0
-    @memcpy(addressof v, buf.cpointer(), 4)
+    @memcpy(addressof v, buf, 4)
     SqlInteger(v)

@@ -28,7 +28,7 @@ class val SqlFloat is SqlValue
       ind_ptr)
 
 primitive _SqlFloatDecode
-  fun apply(buf: Array[U8] box): SqlFloat =>
+  fun apply(buf: Pointer[U8] tag): SqlFloat =>
     var v: F64 = 0
-    @memcpy(addressof v, buf.cpointer(), 8)
+    @memcpy(addressof v, buf, 8)
     SqlFloat(v)
