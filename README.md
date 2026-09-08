@@ -198,8 +198,8 @@ token.cancel()
 
 `OdbcOptions` controls per-connection behavior. Pass it to `Odbc.connect()`:
 
-- `validate_utf8` (default `true`): validate text column data as UTF-8; invalid data returns `FetchError(InvalidUtf8)` instead of silently producing a corrupt `String`
-- `max_column_bytes` (default 16 MiB): upper bound on bytes read per column; columns exceeding this return `FetchError(ColumnTooLarge)`
+* `validate_utf8` (default `true`): validate text column data as UTF-8; invalid data returns `FetchError(InvalidUtf8)` instead of silently producing a corrupt `String`
+* `max_column_bytes` (default 16 MiB): upper bound on bytes read per column; columns exceeding this return `FetchError(ColumnTooLarge)`
 
 ## Data Types
 
