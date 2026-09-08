@@ -71,4 +71,8 @@ all: test
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
 
-.PHONY: all examples clean TAGS test test-one
+local-tests:
+	docker compose up --build --abort-on-container-exit --exit-code-from tests
+	docker compose down
+
+.PHONY: all examples clean TAGS test test-one local-tests
