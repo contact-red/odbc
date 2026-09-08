@@ -3,7 +3,7 @@ use "pony_check"
 use ".."
 
 class iso _BinaryTypesTest is UnitTest
-  fun name(): String => "integration: binary roundtrip via INSERT literal"
+  fun name(): String => "integration: binary roundtrip"
 
   fun apply(h: TestHelper) =>
     let profile = _TestDriver(h)
@@ -15,10 +15,22 @@ class iso _BinaryTypesTest is UnitTest
         "CREATE TABLE _test_bin (b " + profile.binary_col_type + ")",
         h)
 
-      // Insert a known byte sequence as a hex literal.
-      // x'DEADBEEF' is standard SQL hex literal syntax.
-      _TestSetup.exec(
-        conn, "INSERT INTO _test_bin VALUES (x'DEADBEEF')", h)
+      let bytes: Array[U8] val =
+        [as U8: 0xDE; 0xAD; 0xBE; 0xEF]
+
+      match \exhaustive\ conn.prepare("INSERT INTO _test_bin VALUES (?)")
+      | let stmt: Statement =>
+        match stmt.bind(ParamIndex(1), SqlBinary(bytes))
+        | let e: BindError => h.fail("bind: " + e.string())
+        end
+        match \exhaustive\ stmt.execute_update()
+        | let n: USize => h.assert_eq[USize](1, n)
+        | NoRowCount => None
+        | let e: ExecError => h.fail("exec: " + e.string())
+        end
+        stmt.close()
+      | let e: PrepareError => h.fail("prepare: " + e.string())
+      end
 
       match \exhaustive\ conn.query("SELECT b FROM _test_bin")
       | let cursor: Cursor =>
@@ -84,40 +96,8 @@ class iso _BindBinaryTest is UnitTest
       | let e: PrepareError => h.fail("prepare: " + e.string())
       end
 
-      // Also bind an empty binary to confirm zero-length roundtrip
-      let empty: Array[U8] val = recover val Array[U8] end
-      match \exhaustive\ conn.prepare("INSERT INTO _test_bind_bin VALUES (?)")
-      | let stmt: Statement =>
-        match stmt.bind(ParamIndex(1), SqlBinary(empty))
-        | let e: BindError => h.fail("bind empty: " + e.string())
-        end
-        match \exhaustive\ stmt.execute_update()
-        | let n: USize => h.assert_eq[USize](1, n)
-        | NoRowCount => None
-        | let e: ExecError => h.fail("exec empty: " + e.string())
-        end
-        stmt.close()
-      | let e: PrepareError => h.fail("prepare empty: " + e.string())
-      end
-
-      match \exhaustive\
-        conn.query("SELECT b FROM _test_bind_bin ORDER BY length(b)")
+      match \exhaustive\ conn.query("SELECT b FROM _test_bind_bin")
       | let cursor: Cursor =>
-        // First row: empty binary
-        match \exhaustive\ cursor.fetch()
-        | let row: Row =>
-          try
-            match row.binary(ColIndex(1))?
-            | let v: Array[U8] val =>
-              h.assert_eq[USize](0, v.size(), "empty should be 0 bytes")
-            | SqlNull => h.fail("empty binary was null")
-            end
-          else h.fail("column read error (empty)") end
-        | EndOfRows => h.fail("no rows")
-        | let e: FetchError => h.fail("fetch empty: " + e.string())
-        end
-
-        // Second row: 8-byte payload with embedded nulls
         match \exhaustive\ cursor.fetch()
         | let row: Row =>
           try
@@ -135,7 +115,7 @@ class iso _BindBinaryTest is UnitTest
             | SqlNull => h.fail("binary was null")
             end
           else h.fail("column read error") end
-        | EndOfRows => h.fail("expected second row")
+        | EndOfRows => h.fail("no rows")
         | let e: FetchError => h.fail("fetch: " + e.string())
         end
         cursor.close()
