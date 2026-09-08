@@ -65,10 +65,10 @@ primitive ODBCConstants
   fun sql_type_time(): I16 => 92
   fun sql_type_timestamp(): I16 => 93
 
-  // Struct sizes (bytes)
-  fun date_struct_size(): USize => 6
-  fun time_struct_size(): USize => 6
-  fun timestamp_struct_size(): USize => 16
+  // Struct sizes (bytes) — derived from C sizeof
+  fun date_struct_size(): USize => @odbc_sizeof_date_struct()
+  fun time_struct_size(): USize => @odbc_sizeof_time_struct()
+  fun timestamp_struct_size(): USize => @odbc_sizeof_timestamp_struct()
 
   // SQLFreeStmt options
   fun sql_close_cursor(): U16 => 0

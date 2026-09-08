@@ -26,7 +26,7 @@ endif
 
 PONYC := $(PONYC)
 
-SOURCE_FILES := $(shell find $(SRC_DIR) -name *.pony)
+SOURCE_FILES := $(shell find $(SRC_DIR) -name *.pony -o -name *.c -o -name *.h)
 EXAMPLES := $(notdir $(shell find $(EXAMPLES_DIR)/* -maxdepth 0 -type d))
 EXAMPLES_SOURCE_FILES := $(shell find $(EXAMPLES_DIR) -name *.pony)
 EXAMPLES_BINARIES := $(addprefix $(BUILD_DIR)/,$(EXAMPLES))
@@ -73,6 +73,6 @@ $(BUILD_DIR):
 
 local-tests:
 	docker compose up --build --abort-on-container-exit --exit-code-from tests
-	docker compose down
+	docker compose down -v
 
 .PHONY: all examples clean TAGS test test-one local-tests

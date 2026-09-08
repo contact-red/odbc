@@ -63,6 +63,38 @@ use @SQLCancel[I16](stmt: Pointer[None] tag)
 use @memcpy[Pointer[None] tag](dst: Pointer[None] tag, src: Pointer[None] tag,
   n: USize)
 
+// ODBC struct codecs (odbc_structs.c)
+use @odbc_sizeof_date_struct[USize]()
+use @odbc_sizeof_time_struct[USize]()
+use @odbc_sizeof_timestamp_struct[USize]()
+
+use @odbc_decode_date[None](buf: Pointer[U8] tag,
+  year: Pointer[I16] tag, month: Pointer[U16] tag,
+  day: Pointer[U16] tag)
+use @odbc_decode_time[None](buf: Pointer[U8] tag,
+  hour: Pointer[U16] tag, minute: Pointer[U16] tag,
+  second: Pointer[U16] tag)
+use @odbc_decode_timestamp[None](buf: Pointer[U8] tag,
+  year: Pointer[I16] tag, month: Pointer[U16] tag,
+  day: Pointer[U16] tag, hour: Pointer[U16] tag,
+  minute: Pointer[U16] tag, second: Pointer[U16] tag,
+  fraction: Pointer[U32] tag)
+
+use @odbc_encode_date[None](buf: Pointer[U8] tag,
+  year: I16, month: U16, day: U16)
+use @odbc_encode_time[None](buf: Pointer[U8] tag,
+  hour: U16, minute: U16, second: U16)
+use @odbc_encode_timestamp[None](buf: Pointer[U8] tag,
+  year: I16, month: U16, day: U16,
+  hour: U16, minute: U16, second: U16,
+  fraction: U32)
+
+// Column describe (odbc_columns.c)
+use @odbc_describe_column[I32](hstmt: Pointer[None] tag,
+  col: U16, out_sql_type: Pointer[I16] tag,
+  out_c_type: Pointer[I16] tag, out_buf_size: Pointer[USize] tag,
+  max_column_bytes: USize)
+
 // Diagnostics
 use @SQLGetDiagRec[I16](handle_type: I16, handle: Pointer[None] tag,
   rec_number: I16, sqlstate: Pointer[None] tag,

@@ -13,11 +13,8 @@ class val SqlDate is SqlValue
     day = day'
     _buf =
       recover val
-        var y = year'; var m = month'; var d = day'
         let b = Array[U8].init(0, ODBCConstants.date_struct_size())
-        @memcpy(b.cpointer(),  addressof y, 2)
-        @memcpy(b.cpointer(2), addressof m, 2)
-        @memcpy(b.cpointer(4), addressof d, 2)
+        @odbc_encode_date(b.cpointer(), year', month', day')
         b
       end
 
@@ -55,7 +52,5 @@ primitive _SqlDateDecode
     var yr: I16 = 0
     var mo: U16 = 0
     var dy: U16 = 0
-    @memcpy(addressof yr, buf,           2)
-    @memcpy(addressof mo, buf.offset(2), 2)
-    @memcpy(addressof dy, buf.offset(4), 2)
+    @odbc_decode_date(buf, addressof yr, addressof mo, addressof dy)
     SqlDate(yr, mo, dy)

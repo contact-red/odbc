@@ -29,17 +29,9 @@ class val SqlTimestamp is SqlValue
     fraction = fraction'
     _buf =
       recover val
-        var y = year';   var mo = month';  var d = day'
-        var h = hour';   var mi = minute'; var s = second'
-        var f = fraction'
         let b = Array[U8].init(0, ODBCConstants.timestamp_struct_size())
-        @memcpy(b.cpointer(),    addressof y,  2)
-        @memcpy(b.cpointer(2),   addressof mo, 2)
-        @memcpy(b.cpointer(4),   addressof d,  2)
-        @memcpy(b.cpointer(6),   addressof h,  2)
-        @memcpy(b.cpointer(8),   addressof mi, 2)
-        @memcpy(b.cpointer(10),  addressof s,  2)
-        @memcpy(b.cpointer(12),  addressof f,  4)
+        @odbc_encode_timestamp(b.cpointer(), year', month', day',
+          hour', minute', second', fraction')
         b
       end
 
@@ -94,11 +86,6 @@ primitive _SqlTimestampDecode
     var mi: U16 = 0
     var se: U16 = 0
     var fr: U32 = 0
-    @memcpy(addressof yr, buf,            2)
-    @memcpy(addressof mo, buf.offset(2),  2)
-    @memcpy(addressof dy, buf.offset(4),  2)
-    @memcpy(addressof hr, buf.offset(6),  2)
-    @memcpy(addressof mi, buf.offset(8),  2)
-    @memcpy(addressof se, buf.offset(10), 2)
-    @memcpy(addressof fr, buf.offset(12), 4)
+    @odbc_decode_timestamp(buf, addressof yr, addressof mo, addressof dy,
+      addressof hr, addressof mi, addressof se, addressof fr)
     SqlTimestamp(yr, mo, dy, hr, mi, se, fr)
