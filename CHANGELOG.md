@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file. This projec
 
 ### Changed
 
+- Require ponyc 0.71.0 ([PR #10](https://github.com/contact-red/odbc/pull/10))
 
 ## [0.1.1] - 2026-05-12
 
