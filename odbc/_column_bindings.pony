@@ -45,132 +45,30 @@ class ref _ColumnBindings
 
     var col: U16 = 1
     while col <= nc.u16() do
-      // Describe column — we only need data_type and col_size,
-      // but SQLDescribeCol requires a name buffer
-      let name_buf = Array[U8].init(0, 2)
-      var name_len: I16 = 0
-      var data_type: I16 = 0
-      var col_size: U64 = 0
-      var decimal_digits: I16 = 0
-      var nullable: I16 = 0
+      var sql_type: I16 = 0
+      var c_type: I16 = 0
+      var buf_size: USize = 0
+      // 0=raw, 1=text, 2=binary, 3=fixed
+      let category = @odbc_describe_column(
+        hstmt, col,
+        addressof sql_type, addressof c_type, addressof buf_size,
+        _opts.max_column_bytes())
 
-      @SQLDescribeCol(
-        hstmt,
-        col,
-        name_buf.cpointer(),
-        2,
-        addressof name_len,
-        addressof data_type,
-        addressof col_size,
-        addressof decimal_digits,
-        addressof nullable)
-
-      _sql_types.push(data_type)
-
-      // Map SQL type to C type
-      let c_type: I16 =
-        match data_type
-        | ODBCConstants.sql_bit() => ODBCConstants.c_bit()
-        | ODBCConstants.sql_tinyint() => ODBCConstants.c_stinyint()
-        | ODBCConstants.sql_smallint() => ODBCConstants.c_sshort()
-        | ODBCConstants.sql_integer() => ODBCConstants.c_slong()
-        | ODBCConstants.sql_bigint() => ODBCConstants.c_sbigint()
-        | ODBCConstants.sql_real() => ODBCConstants.c_double()
-        | ODBCConstants.sql_float() => ODBCConstants.c_double()
-        | ODBCConstants.sql_double() => ODBCConstants.c_double()
-        | ODBCConstants.sql_char() => ODBCConstants.c_char()
-        | ODBCConstants.sql_varchar() => ODBCConstants.c_char()
-        | ODBCConstants.sql_longvarchar() => ODBCConstants.c_char()
-        | ODBCConstants.sql_type_date() => ODBCConstants.c_type_date()
-        | ODBCConstants.sql_type_time() => ODBCConstants.c_type_time()
-        | ODBCConstants.sql_type_timestamp() => ODBCConstants.c_type_timestamp()
-        | ODBCConstants.sql_numeric() => ODBCConstants.c_char()
-        | ODBCConstants.sql_decimal() => ODBCConstants.c_char()
-        | ODBCConstants.sql_binary() => ODBCConstants.c_binary()
-        | ODBCConstants.sql_varbinary() => ODBCConstants.c_binary()
-        | ODBCConstants.sql_longvarbinary() => ODBCConstants.c_binary()
-        else
-        // Unmapped SQL type — leave unbound; we'll fetch raw bytes via
-        // SQLGetData on read and surface as SqlRaw. A 1-byte placeholder
-        // keeps _bufs indexed in lockstep with the other per-column arrays.
-        _c_types.push(0)
-        _bufs.push(CBuffer[I64](1 where bzero = false))
-        _is_text.push(false)
-        _is_binary.push(false)
-        _is_raw.push(true)
-        col = col + 1
-        continue
-      end
-
+      _sql_types.push(sql_type)
       _c_types.push(c_type)
-      _is_raw.push(false)
+      _is_raw.push(category == 0)
+      _is_text.push(category == 1)
+      _is_binary.push(category == 2)
 
-      if c_type == ODBCConstants.c_char() then
-        // Some drivers report col_size=0 for TEXT/LONGVARCHAR.
-        let buf_size =
-          (col_size + 1).usize().max(4096).min(_opts.max_column_bytes())
-        let cb = CBuffer[I64](buf_size)
-
-        _bufs.push(cb)
-        _is_text.push(true)
-        _is_binary.push(false)
-
-        let wbox = cb.written_size_ptr()
-        let rc =
-          @SQLBindCol(
-          hstmt,
-          col,
-          c_type,
-          cb.ptr(),
-          buf_size.i64(),
-          addressof wbox.value)
-        if not ODBCConstants.ok(rc) then error end
-      elseif c_type == ODBCConstants.c_binary() then
-        // Drivers may report col_size=0 for LONGVARBINARY.
-        let buf_size =
-          col_size.usize().max(4096).min(_opts.max_column_bytes())
-        let cb = CBuffer[I64](buf_size)
-
-        _bufs.push(cb)
-        _is_text.push(false)
-        _is_binary.push(true)
-
-        let wbox = cb.written_size_ptr()
-        let rc =
-          @SQLBindCol(
-          hstmt,
-          col,
-          c_type,
-          cb.ptr(),
-          buf_size.i64(),
-          addressof wbox.value)
-        if not ODBCConstants.ok(rc) then error end
+      if category == 0 then
+        _bufs.push(CBuffer[I64](1 where bzero = false))
       else
-        let fsize: USize =
-          if c_type == ODBCConstants.c_bit() then 1
-          elseif c_type == ODBCConstants.c_type_date() then ODBCConstants.date_struct_size()
-          elseif c_type == ODBCConstants.c_type_time() then ODBCConstants.time_struct_size()
-          elseif c_type == ODBCConstants.c_type_timestamp() then
-            ODBCConstants.timestamp_struct_size()
-          elseif c_type == ODBCConstants.c_stinyint() then 1
-          elseif c_type == ODBCConstants.c_sshort() then 2
-          elseif c_type == ODBCConstants.c_slong() then 4
-          else 8
-          end
-        let cb = CBuffer[I64](fsize)
-
+        let cb = CBuffer[I64](buf_size)
         _bufs.push(cb)
-        _is_text.push(false)
-        _is_binary.push(false)
-
         let wbox = cb.written_size_ptr()
-        let rc =
-          @SQLBindCol(
-          hstmt,
-          col,
-          c_type,
-          cb.ptr(),
-          fsize.i64(),
+        let rc = @SQLBindCol(
+          hstmt, col, c_type,
+          cb.ptr(), buf_size.i64(),
           addressof wbox.value)
         if not ODBCConstants.ok(rc) then error end
       end

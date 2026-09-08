@@ -13,11 +13,8 @@ class val SqlTime is SqlValue
     second = second'
     _buf =
       recover val
-        var h = hour'; var mi = minute'; var s = second'
         let b = Array[U8].init(0, ODBCConstants.time_struct_size())
-        @memcpy(b.cpointer(),  addressof h,  2)
-        @memcpy(b.cpointer(2), addressof mi, 2)
-        @memcpy(b.cpointer(4), addressof s,  2)
+        @odbc_encode_time(b.cpointer(), hour', minute', second')
         b
       end
 
@@ -56,7 +53,5 @@ primitive _SqlTimeDecode
     var hr: U16 = 0
     var mi: U16 = 0
     var se: U16 = 0
-    @memcpy(addressof hr, buf,           2)
-    @memcpy(addressof mi, buf.offset(2), 2)
-    @memcpy(addressof se, buf.offset(4), 2)
+    @odbc_decode_time(buf, addressof hr, addressof mi, addressof se)
     SqlTime(hr, mi, se)
