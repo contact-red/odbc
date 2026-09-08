@@ -9,7 +9,7 @@ odbc is beta-level software that will change frequently. Expect breaking changes
 ## Installation
 
 * Install [corral](https://github.com/ponylang/corral)
-* `corral add github.com/contact-red/odbc.git --version 0.1.1`
+* `corral add github.com/contact-red/odbc.git --version 0.2.0`
 * `corral fetch` to fetch your dependencies
 * `use "odbc"` to include this package
 * `corral run -- ponyc` to compile your application
