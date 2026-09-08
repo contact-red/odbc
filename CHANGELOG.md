@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file. This projec
 
 ### Added
 
+- Add SqlBinary type for binary columns ([PR #11](https://github.com/contact-red/odbc/pull/11))
 
 ### Changed
 
