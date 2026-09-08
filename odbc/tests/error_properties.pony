@@ -317,4 +317,17 @@ class iso _SqlValueRoundtripProperty is Property1[_SqlValueInput]
           ph.assert_eq[String val](v.value, r.value)
         else ph.fail("decimal returned SqlNull") end
       else ph.fail("decimal raised error") end
+    | let v: SqlBinary =>
+      try
+        match row.binary(ci)?
+        | let r: Array[U8] val =>
+          ph.assert_eq[USize](v.value.size(), r.size())
+          var i: USize = 0
+          while i < v.value.size() do
+            try ph.assert_eq[U8](v.value(i)?, r(i)?)
+            else ph.fail("binary byte mismatch at " + i.string()) end
+            i = i + 1
+          end
+        else ph.fail("binary returned SqlNull") end
+      else ph.fail("binary raised error") end
     end

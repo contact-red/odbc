@@ -24,6 +24,9 @@ class val DriverProfile
     """
   let large_text_sizes: Array[USize] val
   let huge_text_col_type: String val
+  let binary_col_type: String val
+  let large_binary_col_type: String val
+  let large_binary_sizes: Array[USize] val
 
   new val postgresql() =>
     name = "postgresql"
@@ -33,6 +36,10 @@ class val DriverProfile
     large_text_sizes = [as USize:
       100; 2000; 4000; 4095; 4096; 5000; 8000; 10240; 20000; 100000; 1000000; 10000000]
     huge_text_col_type = "TEXT"
+    binary_col_type = "BYTEA"
+    large_binary_col_type = "BYTEA"
+    large_binary_sizes = [as USize:
+      100; 2000; 4000; 4095; 4096; 5000; 8000; 10240; 20000; 100000; 1000000; 10000000]
 
   new val mariadb() =>
     name = "mariadb"
@@ -42,6 +49,10 @@ class val DriverProfile
     large_text_sizes = [as USize:
       100; 2000; 4000; 4095; 4096; 5000; 8000; 10240; 20000; 100000; 1000000; 10000000]
     huge_text_col_type = "LONGTEXT"
+    binary_col_type = "VARBINARY(255)"
+    large_binary_col_type = "LONGBLOB"
+    large_binary_sizes = [as USize:
+      100; 2000; 4000; 4095; 4096; 5000; 8000; 10240; 20000; 100000; 1000000; 10000000]
 
   new val sqlite() =>
     name = "sqlite"
@@ -51,6 +62,10 @@ class val DriverProfile
     large_text_sizes = [as USize:
       100; 2000; 4000; 4095; 4096; 5000; 8000; 10240; 20000; 100000; 1000000; 10000000]
     huge_text_col_type = "TEXT"
+    binary_col_type = "BLOB"
+    large_binary_col_type = "BLOB"
+    large_binary_sizes = [as USize:
+      100; 2000; 4000; 4095; 4096; 5000; 8000; 10240; 20000; 100000; 1000000; 10000000]
 
 primitive _TestDriver
   fun apply(h: TestHelper): DriverProfile =>

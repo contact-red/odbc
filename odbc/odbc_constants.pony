@@ -58,6 +58,9 @@ primitive ODBCConstants
   fun sql_bit(): I16 => -7
   fun sql_numeric(): I16 => 2
   fun sql_decimal(): I16 => 3
+  fun sql_binary(): I16 => -2
+  fun sql_varbinary(): I16 => -3
+  fun sql_longvarbinary(): I16 => -4
   fun sql_type_date(): I16 => 91
   fun sql_type_time(): I16 => 92
   fun sql_type_timestamp(): I16 => 93

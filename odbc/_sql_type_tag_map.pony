@@ -22,5 +22,8 @@ primitive _SqlTypeTagMap
     | ODBCConstants.sql_type_timestamp() => SqlTagTimestamp
     | ODBCConstants.sql_numeric() => SqlTagDecimal
     | ODBCConstants.sql_decimal() => SqlTagDecimal
+    | ODBCConstants.sql_binary() => SqlTagBinary
+    | ODBCConstants.sql_varbinary() => SqlTagBinary
+    | ODBCConstants.sql_longvarbinary() => SqlTagBinary
     else SqlTagUnknown(data_type)
     end

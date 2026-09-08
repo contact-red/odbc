@@ -1,7 +1,7 @@
 type SqlTypeTag is
   ( SqlTagBool
   | SqlTagTinyInt | SqlTagSmallInt | SqlTagInteger | SqlTagBigInt
-  | SqlTagFloat | SqlTagText
+  | SqlTagFloat | SqlTagText | SqlTagBinary
   | SqlTagDate | SqlTagTime | SqlTagTimestamp | SqlTagDecimal
   | SqlTagUnknown )
   """
@@ -40,6 +40,9 @@ primitive SqlTagTime
 
 primitive SqlTagTimestamp
   fun string(): String val => "Timestamp"
+
+primitive SqlTagBinary
+  fun string(): String val => "Binary"
 
 primitive SqlTagDecimal
   fun string(): String val => "Decimal"
