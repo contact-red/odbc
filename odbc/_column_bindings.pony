@@ -22,9 +22,8 @@ class ref _ColumnBindings
   let _c_types: Array[I16] ref
   // Per-column buffer + indicator. For raw columns, a 1-byte placeholder.
   let _bufs: Array[CBuffer[I64]] ref
-  // Whether column is text (substring decode) or fixed-width (binary decode)
   let _is_text: Array[Bool] ref
-  // Whether column is raw — unbound, read via SQLGetData on fetch.
+  let _is_binary: Array[Bool] ref
   let _is_raw: Array[Bool] ref
   let _opts: OdbcOptions
   let _hstmt: Pointer[None] tag
@@ -41,6 +40,7 @@ class ref _ColumnBindings
     _c_types = Array[I16](_num_cols)
     _bufs = Array[CBuffer[I64]](_num_cols)
     _is_text = Array[Bool](_num_cols)
+    _is_binary = Array[Bool](_num_cols)
     _is_raw = Array[Bool](_num_cols)
 
     var col: U16 = 1
@@ -86,6 +86,9 @@ class ref _ColumnBindings
         | ODBCConstants.sql_type_timestamp() => ODBCConstants.c_type_timestamp()
         | ODBCConstants.sql_numeric() => ODBCConstants.c_char()
         | ODBCConstants.sql_decimal() => ODBCConstants.c_char()
+        | ODBCConstants.sql_binary() => ODBCConstants.c_binary()
+        | ODBCConstants.sql_varbinary() => ODBCConstants.c_binary()
+        | ODBCConstants.sql_longvarbinary() => ODBCConstants.c_binary()
         else
         // Unmapped SQL type — leave unbound; we'll fetch raw bytes via
         // SQLGetData on read and surface as SqlRaw. A 1-byte placeholder
@@ -93,6 +96,7 @@ class ref _ColumnBindings
         _c_types.push(0)
         _bufs.push(CBuffer[I64](1 where bzero = false))
         _is_text.push(false)
+        _is_binary.push(false)
         _is_raw.push(true)
         col = col + 1
         continue
@@ -102,14 +106,34 @@ class ref _ColumnBindings
       _is_raw.push(false)
 
       if c_type == ODBCConstants.c_char() then
-        // Text column: allocate buffer based on declared col_size, capped.
-        // Floor at 4096 — some drivers report col_size=0 for TEXT/LONGVARCHAR.
+        // Some drivers report col_size=0 for TEXT/LONGVARCHAR.
         let buf_size =
           (col_size + 1).usize().max(4096).min(_opts.max_column_bytes())
         let cb = CBuffer[I64](buf_size)
 
         _bufs.push(cb)
         _is_text.push(true)
+        _is_binary.push(false)
+
+        let wbox = cb.written_size_ptr()
+        let rc =
+          @SQLBindCol(
+          hstmt,
+          col,
+          c_type,
+          cb.ptr(),
+          buf_size.i64(),
+          addressof wbox.value)
+        if not ODBCConstants.ok(rc) then error end
+      elseif c_type == ODBCConstants.c_binary() then
+        // Drivers may report col_size=0 for LONGVARBINARY.
+        let buf_size =
+          col_size.usize().max(4096).min(_opts.max_column_bytes())
+        let cb = CBuffer[I64](buf_size)
+
+        _bufs.push(cb)
+        _is_text.push(false)
+        _is_binary.push(true)
 
         let wbox = cb.written_size_ptr()
         let rc =
@@ -122,7 +146,6 @@ class ref _ColumnBindings
           addressof wbox.value)
         if not ODBCConstants.ok(rc) then error end
       else
-        // Fixed-width column
         let fsize: USize =
           if c_type == ODBCConstants.c_bit() then 1
           elseif c_type == ODBCConstants.c_type_date() then ODBCConstants.date_struct_size()
@@ -132,12 +155,13 @@ class ref _ColumnBindings
           elseif c_type == ODBCConstants.c_stinyint() then 1
           elseif c_type == ODBCConstants.c_sshort() then 2
           elseif c_type == ODBCConstants.c_slong() then 4
-          else 8 // 8 covers I64 and F64
+          else 8
           end
         let cb = CBuffer[I64](fsize)
 
         _bufs.push(cb)
         _is_text.push(false)
+        _is_binary.push(false)
 
         let wbox = cb.written_size_ptr()
         let rc =
@@ -176,8 +200,8 @@ class ref _ColumnBindings
     """
     Overwrite a MutableRow with values from the current fetch.
     Reuses the row object and its column array — no allocation for the
-    row container (though SqlText/SqlDecimal values are still allocated
-    since they own their string data).
+    row container (though SqlText/SqlDecimal/SqlBinary values are still
+    allocated since they own their data).
     """
     row._clear()
 
@@ -209,8 +233,6 @@ class ref _ColumnBindings
       elseif _is_text(i)? then
         let len = ind.usize()
 
-        // If data fits in bound buffer, read directly.
-        // Otherwise fall back to SQLGetData for the full value.
         var text: String val = ""
         if len < cb.allocated() then
           text = cb.copy_string()?
@@ -231,6 +253,19 @@ class ref _ColumnBindings
             return FetchError(InvalidUtf8)
           end
           return SqlText(text)
+        end
+      elseif _is_binary(i)? then
+        let len = ind.usize()
+
+        if len <= cb.allocated() then
+          cb.set_written_size(ind)
+          let bytes: Array[U8] val = cb.copy_array()?
+          return SqlBinary(bytes)
+        else
+          match _get_long_binary(i)
+          | let v: SqlBinary => return v
+          | let e: FetchError => return e
+          end
         end
       else
         let c_type = _c_types(i)?
@@ -333,6 +368,45 @@ class ref _ColumnBindings
       // markers and the +1 null-terminator slot).
       cb.set_written_size(len.i64())
       cb.copy_string()?
+    else
+      FetchError(DriverFetchError)
+    end
+
+  fun ref _get_long_binary(i: USize): (SqlBinary | FetchError) =>
+    """
+    Retrieve full binary data for column i when the bound buffer was too
+    small. Same re-fetch strategy as `_get_long_text` but without the
+    null-terminator byte.
+    """
+    try
+      let bound = _bufs(i)?
+      let total_len = bound.get_written_size().usize()
+      if total_len > _opts.max_column_bytes() then
+        return FetchError(ColumnTooLarge)
+      end
+
+      let buf = recover iso Array[U8].init(0, total_len) end
+      var ind: I64 = 0
+      let rc =
+        @SQLGetData(
+        _hstmt,
+        (i + 1).u16(),
+        ODBCConstants.c_binary(),
+        buf.cpointer(),
+        total_len.i64(),
+        addressof ind)
+
+      if not ODBCConstants.ok(rc) then
+        return FetchError(DriverFetchError)
+      end
+
+      let len: USize =
+        if ind == ODBCConstants.sql_null_data() then 0
+        elseif ind < 0 then 0
+        else ind.usize().min(total_len)
+        end
+      buf.truncate(len)
+      SqlBinary(consume buf)
     else
       FetchError(DriverFetchError)
     end

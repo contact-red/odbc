@@ -77,6 +77,17 @@ class val Row
     else error
     end
 
+  fun binary(i: ColIndex): (Array[U8] val | SqlNull) ? =>
+    """
+    Read column as Array[U8] val. Raises error on type mismatch or out
+    of range.
+    """
+    match column(i)?
+    | SqlNull => SqlNull
+    | let v: SqlBinary => v.value
+    else error
+    end
+
   fun date(i: ColIndex): (SqlDate | SqlNull) ? =>
     """
     Read column as SqlDate. Raises error on type mismatch or out of range.

@@ -36,6 +36,7 @@ trait val SqlValue
     | ODBCConstants.c_type_date()      => ODBCConstants.sql_type_date()
     | ODBCConstants.c_type_time()      => ODBCConstants.sql_type_time()
     | ODBCConstants.c_type_timestamp() => ODBCConstants.sql_type_timestamp()
+    | ODBCConstants.c_binary()         => ODBCConstants.sql_varbinary()
     else ODBCConstants.sql_varchar()
     end
 

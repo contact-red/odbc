@@ -1,6 +1,6 @@
 class val MaxColumnBytes
   """
-  Validated upper bound on bytes read per text/decimal column.
+  Validated upper bound on bytes read per column.
   Constructed once at the connection boundary; downstream code can
   trust the value is within [min(), max()].
   """
@@ -20,9 +20,8 @@ class val MaxColumnBytes
 
   fun tag min(): USize =>
     """
-    Floor: text column buffers must hold at least a small row's worth
-    of data plus a null terminator. 4 KiB matches the pre-existing
-    floor in _ColumnBindings.
+    Floor: column buffers must hold at least a small row's worth of
+    data. 4 KiB matches the pre-existing floor in _ColumnBindings.
     """
     4096
 

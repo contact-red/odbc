@@ -14,7 +14,7 @@ class val _RowTestInput
 
 primitive _GenHelper
   fun random_sql_value(rnd: Randomness): SqlValue ? =>
-    let which = rnd.usize(0, 11)?
+    let which = rnd.usize(0, 12)?
     match which
     | 0 => SqlTinyInt(rnd.i8()?)
     | 1 => SqlSmallInt(rnd.i16()?)
@@ -64,6 +64,19 @@ primitive _GenHelper
         buf
       end
       SqlDecimal(s)
+    | 11 =>
+      let len = rnd.usize(0, 32)?
+      let bytes =
+        recover val
+        let buf = Array[U8](len)
+        var i: USize = 0
+        while i < len do
+          buf.push(rnd.u8()?)
+          i = i + 1
+        end
+        buf
+      end
+      SqlBinary(bytes)
     else SqlNull
     end
 
