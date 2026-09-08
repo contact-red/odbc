@@ -16,14 +16,14 @@ class iso _SqlstateClassifierProperty is Property1[_SqlstateInput]
   fun gen(): Generator[_SqlstateInput] =>
     Generator[_SqlstateInput](
       object is GenObj[_SqlstateInput]
-        fun generate(rnd: Randomness): _SqlstateInput^ =>
-          let which = rnd.usize(0, 3)
+        fun generate(rnd: Randomness): _SqlstateInput^ ? =>
+          let which = rnd.usize(0, 3)?
           let suffix =
             recover val
             String(3)
-              .> push(rnd.u8(0x30, 0x39))
-              .> push(rnd.u8(0x30, 0x39))
-              .> push(rnd.u8(0x30, 0x39))
+              .> push(rnd.u8(0x30, 0x39)?)
+              .> push(rnd.u8(0x30, 0x39)?)
+              .> push(rnd.u8(0x30, 0x39)?)
           end
           match which
           | 0 => _SqlstateInput("08" + suffix, "connection lost")
@@ -33,8 +33,7 @@ class iso _SqlstateClassifierProperty is Property1[_SqlstateInput]
             let prefix =
               recover val
               let s = String(2)
-              // Avoid 08, 23, 42
-              let p = rnd.usize(0, 4)
+              let p = rnd.usize(0, 4)?
               match p
               | 0 => s.append("01")
               | 1 => s.append("07")
@@ -72,21 +71,20 @@ class iso _DescribeParamClassifierProperty
   fun gen(): Generator[_DescribeParamStateInput] =>
     Generator[_DescribeParamStateInput](
       object is GenObj[_DescribeParamStateInput]
-        fun generate(rnd: Randomness): _DescribeParamStateInput^ =>
-          let which = rnd.usize(0, 4)
+        fun generate(rnd: Randomness): _DescribeParamStateInput^ ? =>
+          let which = rnd.usize(0, 4)?
           match which
           | 0 => _DescribeParamStateInput("IM001", true)
           | 1 => _DescribeParamStateInput("HYC00", true)
           | 2 => _DescribeParamStateInput("HY000", false)
           | 3 => _DescribeParamStateInput("42S02", false)
           else
-            // Random non-matching state.
             let s =
               recover val
                 let buf = String(5)
                 var i: USize = 0
                 while i < 5 do
-                  buf.push(rnd.u8(0x30, 0x39))
+                  buf.push(rnd.u8(0x30, 0x39)?)
                   i = i + 1
                 end
                 buf
@@ -137,15 +135,15 @@ class iso _ErrorRedactionProperty is Property1[_DiagLeakInput]
   fun gen(): Generator[_DiagLeakInput] =>
     Generator[_DiagLeakInput](
       object is GenObj[_DiagLeakInput]
-        fun generate(rnd: Randomness): _DiagLeakInput^ =>
-          let len = rnd.usize(5, 30)
+        fun generate(rnd: Randomness): _DiagLeakInput^ ? =>
+          let len = rnd.usize(5, 30)?
           let secret =
             recover val
             let s = String(len + 7)
             s.append("SECRET_")
             var i: USize = 0
             while i < len do
-              s.push(rnd.u8(0x41, 0x5A)) // uppercase ASCII
+              s.push(rnd.u8(0x41, 0x5A)?)
               i = i + 1
             end
             s
@@ -154,7 +152,7 @@ class iso _ErrorRedactionProperty is Property1[_DiagLeakInput]
             recover val
             let s = String(5)
             var i: USize = 0
-            while i < 5 do s.push(rnd.u8(0x30, 0x39)); i = i + 1 end
+            while i < 5 do s.push(rnd.u8(0x30, 0x39)?); i = i + 1 end
             s
           end
           _DiagLeakInput(secret, state)
@@ -168,14 +166,12 @@ class iso _ErrorRedactionProperty is Property1[_DiagLeakInput]
           input.sqlstate, 42, input.secret_text))
     end
 
-    // ConnectError.string() must not contain the secret
     let ce = ConnectError(DriverConnectFailed, diag)
     let ce_str: String val = ce.string()
     ph.assert_false(
       ce_str.contains(input.secret_text),
       "ConnectError leaked: " + ce_str)
 
-    // ExecError.string() must not contain secret or SQL
     let ee =
       ExecError(
         QueryError, diag, "SELECT secret FROM passwords")
@@ -187,7 +183,6 @@ class iso _ErrorRedactionProperty is Property1[_DiagLeakInput]
       ee_str.contains("passwords"),
       "ExecError leaked SQL: " + ee_str)
 
-    // PrepareError.string() must not contain secret or SQL
     let pe =
       PrepareError(
         DriverPrepareError, diag, "CREATE USER foo PASSWORD 'bar'")
@@ -199,7 +194,6 @@ class iso _ErrorRedactionProperty is Property1[_DiagLeakInput]
       pe_str.contains("PASSWORD"),
       "PrepareError leaked SQL: " + pe_str)
 
-    // But unsafe_diag() SHOULD contain it
     try
       let first_msg = ce.unsafe_diag()(0)?.message()
       ph.assert_eq[String val](
@@ -208,7 +202,6 @@ class iso _ErrorRedactionProperty is Property1[_DiagLeakInput]
       ph.fail("unsafe_diag() didn't contain the secret")
     end
 
-    // And unsafe_sql() SHOULD contain the SQL
     match ee.unsafe_sql()
     | let s: String val =>
       ph.assert_true(s.contains("passwords"))
@@ -228,8 +221,8 @@ class iso _SqlValueRoundtripProperty is Property1[_SqlValueInput]
   fun gen(): Generator[_SqlValueInput] =>
     Generator[_SqlValueInput](
       object is GenObj[_SqlValueInput]
-        fun generate(rnd: Randomness): _SqlValueInput^ =>
-          _SqlValueInput(_GenHelper.random_sql_value(rnd))
+        fun generate(rnd: Randomness): _SqlValueInput^ ? =>
+          _SqlValueInput(_GenHelper.random_sql_value(rnd)?)
       end)
 
   fun property(input: _SqlValueInput, ph: PropertyHelper) =>
