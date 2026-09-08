@@ -24,21 +24,21 @@ primitive _LargeTextGen
   fun apply(): Generator[_LargeTextInput] =>
     Generator[_LargeTextInput](
       object is GenObj[_LargeTextInput]
-        fun generate(rnd: Randomness): _LargeTextInput^ =>
-          let which = rnd.usize(0, 200)
+        fun generate(rnd: Randomness): _LargeTextInput^ ? =>
+          let which = rnd.usize(0, 200)?
           let size =
             if which < 30 then
-              rnd.usize(0, 100)
+              rnd.usize(0, 100)?
             elseif which < 55 then
-              rnd.usize(100, 4095)
+              rnd.usize(100, 4095)?
             elseif which < 80 then
-              rnd.usize(4090, 8200)
+              rnd.usize(4090, 8200)?
             elseif which < 95 then
-              rnd.usize(8200, 32000)
+              rnd.usize(8200, 32000)?
             else
-              rnd.usize(32000, 1000000)
+              rnd.usize(32000, 1000000)?
             end
-          let offset = rnd.usize(0, 10000)
+          let offset = rnd.usize(0, 10000)?
           _LargeTextInput(size, offset)
       end)
 
@@ -79,7 +79,7 @@ class iso _LargeTextGenRoundtripTest is UnitTest
         var i: USize = 0
         while i < samples do
           let input =
-            try gen.generate_value(rnd)?
+            try gen.generate(rnd)?
             else
               h.fail("generator failed at i=" + i.string())
               i = i + 1
