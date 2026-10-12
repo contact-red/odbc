@@ -1,5 +1,4 @@
 use "pony_test"
-use "pony_check"
 use ".."
 
 class iso _BinaryTypesTest is UnitTest
