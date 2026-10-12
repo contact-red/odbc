@@ -1,6 +1,5 @@
 use "lib:odbc"
 use "pony_test"
-use "pony_check"
 use ".."
 
 actor Main is TestList
@@ -15,21 +14,19 @@ actor Main is TestList
     Register all tests.
     """
     // Pure Pony property tests (no driver needed)
-    test(Property1UnitTest[_RowTestInput](_RowIntAccessorProperty))
-    test(Property1UnitTest[_RowTestInput](_RowFloatAccessorProperty))
-    test(Property1UnitTest[_RowTestInput](_RowTextAccessorProperty))
-    test(Property1UnitTest[_RowTestInput](_RowBoolAccessorProperty))
-    test(Property1UnitTest[USize](_RowNullProperty))
-    test(Property1UnitTest[_RowOutOfRangeInput](_RowOutOfRangeProperty))
-    test(Property1UnitTest[_SqlstateInput](_SqlstateClassifierProperty))
-    test(
-      Property1UnitTest[_DescribeParamStateInput](
-        _DescribeParamClassifierProperty))
-    test(Property1UnitTest[_DiagLeakInput](_ErrorRedactionProperty))
-    test(Property1UnitTest[_SqlValueInput](_SqlValueRoundtripProperty))
-    test(Property1UnitTest[_MaxColBytesInput](_MaxColumnBytesValidProperty))
-    test(Property1UnitTest[_MaxColBytesInput](_MaxColumnBytesInvalidProperty))
-    test(Property1UnitTest[_MaxColBytesInput](_MaxColumnBytesMixedProperty))
+    test.property(_RowIntAccessorProperty)
+    test.property(_RowFloatAccessorProperty)
+    test.property(_RowTextAccessorProperty)
+    test.property(_RowBoolAccessorProperty)
+    test.property(_RowNullProperty)
+    test.property(_RowOutOfRangeProperty)
+    test.property(_SqlstateClassifierProperty)
+    test.property(_DescribeParamClassifierProperty)
+    test.property(_ErrorRedactionProperty)
+    test.property(_SqlValueRoundtripProperty)
+    test.property(_MaxColumnBytesValidProperty)
+    test.property(_MaxColumnBytesInvalidProperty)
+    test.property(_MaxColumnBytesMixedProperty)
 
     // Integration tests (need real drivers)
     test(_ConnectDisconnectTest)

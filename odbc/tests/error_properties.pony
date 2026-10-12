@@ -1,5 +1,4 @@
 use "pony_test"
-use "pony_check"
 use ".."
 
 class val _SqlstateInput
@@ -10,20 +9,20 @@ class val _SqlstateInput
     sqlstate = sqlstate'
     expected_str = expected_str'
 
-class iso _SqlstateClassifierProperty is Property1[_SqlstateInput]
+class iso _SqlstateClassifierProperty is Property[_SqlstateInput]
   fun name(): String => "SQLSTATE classifier maps classes correctly"
 
   fun gen(): Generator[_SqlstateInput] =>
     Generator[_SqlstateInput](
       object is GenObj[_SqlstateInput]
-        fun generate(rnd: Randomness): _SqlstateInput^ ? =>
-          let which = rnd.usize(0, 3)?
+        fun generate(rnd: Randomness): _SqlstateInput^ =>
+          let which = rnd.usize(0, 3)
           let suffix =
             recover val
             String(3)
-              .> push(rnd.u8(0x30, 0x39)?)
-              .> push(rnd.u8(0x30, 0x39)?)
-              .> push(rnd.u8(0x30, 0x39)?)
+              .> push(rnd.u8(0x30, 0x39))
+              .> push(rnd.u8(0x30, 0x39))
+              .> push(rnd.u8(0x30, 0x39))
           end
           match which
           | 0 => _SqlstateInput("08" + suffix, "connection lost")
@@ -33,7 +32,7 @@ class iso _SqlstateClassifierProperty is Property1[_SqlstateInput]
             let prefix =
               recover val
               let s = String(2)
-              let p = rnd.usize(0, 4)?
+              let p = rnd.usize(0, 4)
               match p
               | 0 => s.append("01")
               | 1 => s.append("07")
@@ -64,15 +63,15 @@ class val _DescribeParamStateInput
     expects_unsupported = expects_unsupported'
 
 class iso _DescribeParamClassifierProperty
-  is Property1[_DescribeParamStateInput]
+  is Property[_DescribeParamStateInput]
   fun name(): String =>
     "DescribeParam classifier maps IM001/HYC00 to unsupported"
 
   fun gen(): Generator[_DescribeParamStateInput] =>
     Generator[_DescribeParamStateInput](
       object is GenObj[_DescribeParamStateInput]
-        fun generate(rnd: Randomness): _DescribeParamStateInput^ ? =>
-          let which = rnd.usize(0, 4)?
+        fun generate(rnd: Randomness): _DescribeParamStateInput^ =>
+          let which = rnd.usize(0, 4)
           match which
           | 0 => _DescribeParamStateInput("IM001", true)
           | 1 => _DescribeParamStateInput("HYC00", true)
@@ -84,7 +83,7 @@ class iso _DescribeParamClassifierProperty
                 let buf = String(5)
                 var i: USize = 0
                 while i < 5 do
-                  buf.push(rnd.u8(0x30, 0x39)?)
+                  buf.push(rnd.u8(0x30, 0x39))
                   i = i + 1
                 end
                 buf
@@ -129,21 +128,21 @@ class val _DiagLeakInput
     secret_text = secret_text'
     sqlstate = sqlstate'
 
-class iso _ErrorRedactionProperty is Property1[_DiagLeakInput]
+class iso _ErrorRedactionProperty is Property[_DiagLeakInput]
   fun name(): String => "error.string() never contains raw diagnostic message"
 
   fun gen(): Generator[_DiagLeakInput] =>
     Generator[_DiagLeakInput](
       object is GenObj[_DiagLeakInput]
-        fun generate(rnd: Randomness): _DiagLeakInput^ ? =>
-          let len = rnd.usize(5, 30)?
+        fun generate(rnd: Randomness): _DiagLeakInput^ =>
+          let len = rnd.usize(5, 30)
           let secret =
             recover val
             let s = String(len + 7)
             s.append("SECRET_")
             var i: USize = 0
             while i < len do
-              s.push(rnd.u8(0x41, 0x5A)?)
+              s.push(rnd.u8(0x41, 0x5A))
               i = i + 1
             end
             s
@@ -152,7 +151,7 @@ class iso _ErrorRedactionProperty is Property1[_DiagLeakInput]
             recover val
             let s = String(5)
             var i: USize = 0
-            while i < 5 do s.push(rnd.u8(0x30, 0x39)?); i = i + 1 end
+            while i < 5 do s.push(rnd.u8(0x30, 0x39)); i = i + 1 end
             s
           end
           _DiagLeakInput(secret, state)
@@ -215,14 +214,14 @@ class val _SqlValueInput
   new val create(value': SqlValue) =>
     value = value'
 
-class iso _SqlValueRoundtripProperty is Property1[_SqlValueInput]
+class iso _SqlValueRoundtripProperty is Property[_SqlValueInput]
   fun name(): String => "SqlValue -> Row -> typed accessor preserves value"
 
   fun gen(): Generator[_SqlValueInput] =>
     Generator[_SqlValueInput](
       object is GenObj[_SqlValueInput]
-        fun generate(rnd: Randomness): _SqlValueInput^ ? =>
-          _SqlValueInput(_GenHelper.random_sql_value(rnd)?)
+        fun generate(rnd: Randomness): _SqlValueInput^ =>
+          _SqlValueInput(_GenHelper.random_sql_value(rnd))
       end)
 
   fun property(input: _SqlValueInput, ph: PropertyHelper) =>

@@ -1,5 +1,4 @@
 use "pony_test"
-use "pony_check"
 use ".."
 
 class val _LargeTextInput
@@ -24,28 +23,28 @@ primitive _LargeTextGen
   fun apply(): Generator[_LargeTextInput] =>
     Generator[_LargeTextInput](
       object is GenObj[_LargeTextInput]
-        fun generate(rnd: Randomness): _LargeTextInput^ ? =>
-          let which = rnd.usize(0, 200)?
+        fun generate(rnd: Randomness): _LargeTextInput^ =>
+          let which = rnd.usize(0, 200)
           let size =
             if which < 30 then
-              rnd.usize(0, 100)?
+              rnd.usize(0, 100)
             elseif which < 55 then
-              rnd.usize(100, 4095)?
+              rnd.usize(100, 4095)
             elseif which < 80 then
-              rnd.usize(4090, 8200)?
+              rnd.usize(4090, 8200)
             elseif which < 95 then
-              rnd.usize(8200, 32000)?
+              rnd.usize(8200, 32000)
             else
-              rnd.usize(32000, 1000000)?
+              rnd.usize(32000, 1000000)
             end
-          let offset = rnd.usize(0, 10000)?
+          let offset = rnd.usize(0, 10000)
           _LargeTextInput(size, offset)
       end)
 
 class iso _LargeTextGenRoundtripTest is UnitTest
   """
   Generative counterpart to _LargeTextRoundtripTest. Uses the
-  pony_check Generator abstraction to draw 100 (size, offset)
+  pony_test Generator abstraction to draw 100 (size, offset)
   samples with a deterministic seed, inserts each through one
   prepared statement, then reads every row back and verifies byte
   content against the generator. Pairing this with the example-based
@@ -53,7 +52,7 @@ class iso _LargeTextGenRoundtripTest is UnitTest
   of non-boundary byte positions.
   """
   fun name(): String =>
-    "integration: large text roundtrip (pony_check generator)"
+    "integration: large text roundtrip (pony_test generator)"
 
   fun apply(h: TestHelper) =>
     try
