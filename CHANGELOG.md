@@ -13,6 +13,13 @@ All notable changes to this project will be documented in this file. This projec
 ### Changed
 
 
+## [0.2.1] - 2026-10-12
+
+### Fixed
+
+- Update for ponyc 0.74.0 ([PR #15](https://github.com/contact-red/odbc/pull/15))
+
+
 ## [0.2.0] - 2026-09-08
 
 ### Added
